@@ -1178,7 +1178,7 @@ export default function App() {
                   : syncStatus === 'syncing'
                     ? 'Syncing...'
                     : 'Sync Error'
-                : 'Cloud Offline'}
+                : 'Cloud Sync Setup'}
             </span>
           </button>
 
@@ -1349,6 +1349,53 @@ export default function App() {
                     })
                   )}
                 </div>
+              </div>
+
+              {/* Cloud Sync Promotion/Configuration Card */}
+              <div className="bg-gradient-to-br from-charcoal-900 to-charcoal-950 border border-charcoal-800 rounded-xl p-3.5 shadow-md flex flex-col space-y-2.5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className={`p-1.5 rounded-lg border ${
+                      syncSettings.enabled 
+                        ? 'bg-emerald-950/40 border-emerald-800 text-emerald-400' 
+                        : 'bg-indigo-950/40 border-indigo-900 text-indigo-400'
+                    }`}>
+                      <Database size={15} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                        Cloud Sync Engine
+                      </h3>
+                      <p className="text-[10px] text-charcoal-400 font-medium">
+                        {syncSettings.enabled ? 'Active Multi-Device Sync' : 'No sync configured yet'}
+                      </p>
+                    </div>
+                  </div>
+                  {syncSettings.enabled && (
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  )}
+                </div>
+                
+                <p className="text-[11px] leading-relaxed text-charcoal-300">
+                  {syncSettings.enabled 
+                    ? `Synchronizing workspaces using code: ${syncSettings.syncCode || 'Private DB'}. Real-time collaboration is enabled.`
+                    : 'Collaborate with colleagues on-site! Share assessment & design checklists across devices in real-time.'
+                  }
+                </p>
+
+                <button
+                  onClick={() => setShowSyncModal(true)}
+                  className={`w-full py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 cursor-pointer text-center ${
+                    syncSettings.enabled
+                      ? 'bg-charcoal-950 hover:bg-charcoal-900 border-charcoal-800 text-charcoal-300 hover:text-white'
+                      : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 border-indigo-500 text-white shadow-sm shadow-indigo-950/50'
+                  }`}
+                >
+                  {syncSettings.enabled ? 'Configure Sync Settings' : 'Set Up Real-Time Sync'}
+                </button>
               </div>
             </div>
 
