@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  /* Midnight Neo-Soul - Premium Dark Palette */
+  --color-charcoal-50: #ffffff;
+  --color-charcoal-100: #f1f1f7; /* Crisp white/light-gray text */
+  --color-charcoal-200: #c7c7e0; /* Bright secondary text */
+  --color-charcoal-300: #a2a2c2; /* Readable body text */
+  --color-charcoal-400: #7d7d9c; /* Secondary text */
+  --color-charcoal-500: #5a5a75; /* Muted text/icons */
+  --color-charcoal-600: #3f3f54; /* Secondary buttons/borders */
+  --color-charcoal-700: #2d2d3d; /* Hover borders/elements */
+  --color-charcoal-800: #20202b; /* Borders/dividers */
+  --color-charcoal-850: #181822; /* Lighter card bg */
+  --color-charcoal-900: #121217; /* Matte charcoal panel/card background */
+  --color-charcoal-950: #0b0b0f; /* Deep matte black/obsidian page background */
+
+  /* Electric Sunset Orange Accents */
+  --color-sunset-50: #fff3eb;
+  --color-sunset-100: #ffe4d1;
+  --color-sunset-200: #ffc7a3;
+  --color-sunset-300: #ffa166;
+  --color-sunset-400: #ff853c;
+  --color-sunset-500: #ff6b35; /* Electric brand orange */
+  --color-sunset-600: #e04f1a;
+  --color-sunset-700: #b3360b;
+  --color-sunset-800: #922504;
+  --color-sunset-900: #7a1d02;
+
+  /* Deep Indigo Accents */
+  --color-indigo-50: #f5f3ff;
+  --color-indigo-100: #ede9fe;
+  --color-indigo-200: #ddd6fe;
+  --color-indigo-300: #c084fc;
+  --color-indigo-400: #a78bfa;
+  --color-indigo-500: #6366f1; /* Electric indigo */
+  --color-indigo-600: #4f46e5;
+  --color-indigo-700: #4338ca;
+  --color-indigo-800: #3730a3;
+  --color-indigo-900: #312e81;
+  --color-indigo-950: #0f0f22;
+}
+
+@utility bg-charcoal-950 {
+  background-color: var(--color-charcoal-950);
+}
+@utility text-charcoal-100 {
+  color: var(--color-charcoal-100);
+}
+
+body {
+  background-color: var(--color-charcoal-950);
+  color: var(--color-charcoal-100);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar for Dark Mode */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-charcoal-950);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-charcoal-700);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-charcoal-500);
+}
+
+/* Sleek Input Controls for Dark Mode */
+input[type="text"],
+input[type="date"],
+select,
+textarea {
+  background-color: var(--color-charcoal-950) !important;
+  color: var(--color-charcoal-100) !important;
+  border-color: var(--color-charcoal-800) !important;
+}
+
+input[type="text"]:focus,
+input[type="date"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-sunset-500) !important;
+  box-shadow: 0 0 0 1px var(--color-sunset-500) !important;
+}
