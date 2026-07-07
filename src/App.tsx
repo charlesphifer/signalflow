@@ -454,6 +454,7 @@ export default function App() {
   });
 
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'disabled'>('disabled');
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => localStorage.getItem('signalflow_last_synced_at'));
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
@@ -479,6 +480,7 @@ export default function App() {
     setIsSyncingNow(true);
 
     try {
+      setSyncError(null);
       if (syncSettings.provider === 'demo') {
         let currentDemoKey = syncSettings.demoKey;
         
@@ -658,13 +660,14 @@ export default function App() {
         }
       }
     } catch (e: any) {
-      console.error(e);
-      setSyncStatus('error');
-      // If forced, show full details
-      if (forceDirection !== 'auto') {
-        showToast(`Cloud Sync Failure: ${e.message || 'Check your configuration'}`);
-      }
-    } finally {
+       console.error(e);
+       setSyncStatus('error');
+       setSyncError(e.message || String(e));
+       // If forced, show full details
+       if (forceDirection !== 'auto') {
+         showToast(`Cloud Sync Failure: ${e.message || 'Check your configuration'}`);
+       }
+     } finally {
       isSyncingRef.current = false;
       setIsSyncingNow(false);
     }
@@ -2626,6 +2629,9 @@ export default function App() {
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- DISABLE Row-Level Security (RLS) to allow public access:
+alter table ${syncSettings.supabaseTable || 'signalflow_sync'} disable row level security;
+
 -- Enable Realtime (optional):
 alter publication supabase_realtime add table ${syncSettings.supabaseTable || 'signalflow_sync'};`}
                           </pre>
@@ -2636,7 +2642,13 @@ alter publication supabase_realtime add table ${syncSettings.supabaseTable || 's
   sync_key text primary key,
   projects jsonb not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
-);`;
+);
+
+-- DISABLE Row-Level Security (RLS) to allow public access:
+alter table ${syncSettings.supabaseTable || 'signalflow_sync'} disable row level security;
+
+-- Enable Realtime (optional):
+alter publication supabase_realtime add table ${syncSettings.supabaseTable || 'signalflow_sync'};`;
                               navigator.clipboard.writeText(sql);
                               showToast('SQL setup query copied!');
                             }}
@@ -2658,28 +2670,35 @@ alter publication supabase_realtime add table ${syncSettings.supabaseTable || 's
             <div className="p-4 bg-charcoal-950 border-t border-charcoal-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
               
               {/* Connection Status */}
-              <div className="flex items-center space-x-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${
-                  !syncSettings.enabled 
-                    ? 'bg-charcoal-600' 
-                    : syncStatus === 'synced'
-                      ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                      : syncStatus === 'syncing'
-                        ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse'
-                        : 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                }`} />
-                <span className="text-[10px] font-black text-white uppercase tracking-wider">
-                  {!syncSettings.enabled 
-                    ? 'Sync Disabled' 
-                    : syncStatus === 'synced'
-                      ? 'Fully Synced'
-                      : syncStatus === 'syncing'
-                        ? 'Synchronizing...'
-                        : 'Sync Error'}
-                </span>
-                {lastSyncedAt && syncSettings.enabled && (
-                  <span className="text-[9px] text-charcoal-400">
-                    (Last: {new Date(lastSyncedAt).toLocaleTimeString()})
+              <div className="flex flex-col">
+                <div className="flex items-center space-x-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${
+                    !syncSettings.enabled 
+                      ? 'bg-charcoal-600' 
+                      : syncStatus === 'synced'
+                        ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                        : syncStatus === 'syncing'
+                          ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse'
+                          : 'bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                  }`} />
+                  <span className="text-[10px] font-black text-white uppercase tracking-wider">
+                    {!syncSettings.enabled 
+                      ? 'Sync Disabled' 
+                      : syncStatus === 'synced'
+                        ? 'Fully Synced'
+                        : syncStatus === 'syncing'
+                          ? 'Synchronizing...'
+                          : 'Sync Error'}
+                  </span>
+                  {lastSyncedAt && syncSettings.enabled && (
+                    <span className="text-[9px] text-charcoal-400">
+                      (Last: {new Date(lastSyncedAt).toLocaleTimeString()})
+                    </span>
+                  )}
+                </div>
+                {syncError && syncSettings.enabled && (
+                  <span className="text-[9px] text-rose-400 mt-1 max-w-[250px] break-words leading-tight">
+                    {syncError}
                   </span>
                 )}
               </div>
