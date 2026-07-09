@@ -427,6 +427,47 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
   
+  // Google Drive config state
+  const [googleDriveUrl, setGoogleDriveUrl] = useState<string>(() => {
+    return localStorage.getItem('signalflow_google_drive_url') || '';
+  });
+  const [showDriveConfig, setShowDriveConfig] = useState(false);
+
+  // Persist drive URL changes
+  useEffect(() => {
+    localStorage.setItem('signalflow_google_drive_url', googleDriveUrl);
+  }, [googleDriveUrl]);
+
+  // Folder hierarchy text to copy
+  const DRIVE_FOLDER_STRUCTURE = `📁 [Project Number] Project Name/
+├── 📂 01_Floor_Plans/     (AutoCAD DWGs, PDFs)
+├── 📂 02_Ekahau_Files/    (.esx projects, surveys)
+├── 📂 03_Site_Photos/     (AP placement proofs)
+└── 📂 04_Final_Reports/   (Completed PDF exports)`;
+
+  const copyDriveStructureToClipboard = async () => {
+    const projectLabel = selectedProject
+      ? `${selectedProject.number} - ${selectedProject.name}`
+      : 'Project';
+    const text = DRIVE_FOLDER_STRUCTURE.replace('[Project Number]', selectedProject?.number || 'XXXX')
+      .replace('Project Name', selectedProject?.name || 'Project');
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(`Folder structure copied to clipboard for ${projectLabel}`);
+    } catch {
+      showToast('Could not copy to clipboard');
+    }
+  };
+
+  const openGoogleDriveFolder = () => {
+    if (googleDriveUrl) {
+      window.open(googleDriveUrl, '_blank', 'noopener,noreferrer');
+      showToast('Opening Google Drive folder...');
+    } else {
+      showToast('No Google Drive folder configured. Add a URL in the settings above.');
+    }
+  };
+
   // Success / Copied notifications
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -458,8 +499,11 @@ export default function App() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(() => localStorage.getItem('signalflow_last_synced_at'));
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   
   const isSyncingRef = useRef(false);
+  const supabaseClientRef = useRef<any>(null);
+  const supabaseChannelRef = useRef<any>(null);
 
   const showToast = (message: string) => {
     setNotification(message);
@@ -468,8 +512,21 @@ export default function App() {
     }, 3000);
   };
 
+  const syncSettingsRef = useRef(syncSettings);
+  useEffect(() => {
+    syncSettingsRef.current = syncSettings;
+  }, [syncSettings]);
+
+  const projectsRef = useRef(projects);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
   const performSync = useCallback(async (forceDirection: 'push' | 'pull' | 'auto' = 'auto') => {
-    if (!syncSettings.enabled) {
+    const activeSettings = syncSettingsRef.current;
+    const activeProjects = projectsRef.current;
+
+    if (!activeSettings.enabled) {
       setSyncStatus('disabled');
       return;
     }
@@ -481,30 +538,31 @@ export default function App() {
 
     try {
       setSyncError(null);
-      if (syncSettings.provider === 'demo') {
-        let currentDemoKey = syncSettings.demoKey;
+      if (activeSettings.provider === 'demo') {
+        let currentDemoKey = activeSettings.demoKey;
         
         // 1. If we don't have a demo key yet, we must initialize a new bin on the cloud!
         if (!currentDemoKey) {
           const timestamp = new Date().toISOString();
-          const response = await fetch('https://api.restful-api.dev/objects', {
+          const response = await fetch('https://jsonblob.com/api/jsonBlob', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              name: "SignalFlow Clinical Sync Room",
-              data: {
-                projects: projects,
-                updatedAt: timestamp
-              }
+              projects: activeProjects,
+              updatedAt: timestamp
             })
           });
           
           if (!response.ok) throw new Error('Failed to initialize demo sync room');
-          const resData = await response.json();
-          currentDemoKey = resData.id;
+          
+          const locHeader = response.headers.get('Location') || '';
+          const idFromLoc = locHeader.split('/').pop() || '';
+          currentDemoKey = response.headers.get('x-jsonblob-id') || idFromLoc;
+          
+          if (!currentDemoKey) throw new Error('Server did not return a valid Sync Room ID');
           
           // Save the newly generated demo key!
-          const updatedSettings = { ...syncSettings, demoKey: currentDemoKey };
+          const updatedSettings = { ...activeSettings, demoKey: currentDemoKey };
           setSyncSettings(updatedSettings);
           localStorage.setItem('signalflow_sync_settings', JSON.stringify(updatedSettings));
           localStorage.setItem('signalflow_projects_updated_at', timestamp);
@@ -518,11 +576,11 @@ export default function App() {
         }
 
         // 2. Fetch the latest cloud state
-        const response = await fetch(`https://api.restful-api.dev/objects/${currentDemoKey}`);
+        const response = await fetch(`https://jsonblob.com/api/jsonBlob/${currentDemoKey}`);
         if (!response.ok) {
           if (response.status === 404) {
             // Key expired or deleted, let's reset it
-            const updatedSettings = { ...syncSettings, demoKey: '' };
+            const updatedSettings = { ...activeSettings, demoKey: '' };
             setSyncSettings(updatedSettings);
             localStorage.setItem('signalflow_sync_settings', JSON.stringify(updatedSettings));
             throw new Error('Sync room not found on server. Resetting key.');
@@ -531,8 +589,8 @@ export default function App() {
         }
         
         const cloudObj = await response.json();
-        const cloudProjects = cloudObj.data?.projects || [];
-        const cloudUpdatedAt = cloudObj.data?.updatedAt || '';
+        const cloudProjects = cloudObj.projects || [];
+        const cloudUpdatedAt = cloudObj.updatedAt || '';
 
         // Compare timestamps
         const localUpdatedAt = localStorage.getItem('signalflow_projects_updated_at') || new Date(0).toISOString();
@@ -560,15 +618,12 @@ export default function App() {
 
         if (direction === 'push') {
           const timestamp = new Date().toISOString();
-          const updateResponse = await fetch(`https://api.restful-api.dev/objects/${currentDemoKey}`, {
+          const updateResponse = await fetch(`https://jsonblob.com/api/jsonBlob/${currentDemoKey}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              name: "SignalFlow Clinical Sync Room",
-              data: {
-                projects: projects,
-                updatedAt: timestamp
-              }
+              projects: activeProjects,
+              updatedAt: timestamp
             })
           });
           if (!updateResponse.ok) throw new Error('Failed to push changes to demo server');
@@ -588,8 +643,8 @@ export default function App() {
           showToast('Workspace pulled & synchronized with cloud');
         }
 
-      } else if (syncSettings.provider === 'supabase') {
-        const { supabaseUrl, supabaseAnonKey, supabaseTable, supabaseKey } = syncSettings;
+      } else if (activeSettings.provider === 'supabase') {
+        const { supabaseUrl, supabaseAnonKey, supabaseTable, supabaseKey } = activeSettings;
         if (!supabaseUrl || !supabaseAnonKey) {
           throw new Error('Supabase URL and Anon Key are missing');
         }
@@ -636,7 +691,7 @@ export default function App() {
             .from(supabaseTable)
             .upsert({
               sync_key: supabaseKey,
-              projects: projects,
+              projects: activeProjects,
               updated_at: timestamp
             });
 
@@ -660,18 +715,21 @@ export default function App() {
         }
       }
     } catch (e: any) {
-       console.error(e);
-       setSyncStatus('error');
-       setSyncError(e.message || String(e));
-       // If forced, show full details
-       if (forceDirection !== 'auto') {
-         showToast(`Cloud Sync Failure: ${e.message || 'Check your configuration'}`);
-       }
-     } finally {
+          console.error(e);
+          setSyncStatus('error');
+          setSyncError(e.message || String(e));
+          // Determine if this is a CORS issue (common with jsonblob.com from browser)
+          const errorMsg = e.message || String(e);
+          if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('Network request failed') || errorMsg.includes('Load failed')) {
+            showToast(`🌐 Network/CORS Error: jsonblob.com may not allow cross-origin requests from this domain. Try Supabase mode instead, or check your network connection.`);
+          } else {
+            showToast(`Cloud Sync Error: ${e.message || 'Check your configuration'}`);
+          }
+        } finally {
       isSyncingRef.current = false;
       setIsSyncingNow(false);
     }
-  }, [projects, syncSettings]);
+  }, []);
 
   // Auto-save projects to local storage & trigger Cloud Push
   useEffect(() => {
@@ -689,7 +747,7 @@ export default function App() {
     }
   }, [projects, syncSettings.enabled, performSync]);
 
-  // Periodic polling check (every 15 seconds) to pull down changes
+  // Periodic polling check — shorter interval for demo (no realtime), longer for supabase as fallback
   useEffect(() => {
     if (!syncSettings.enabled) {
       setSyncStatus('disabled');
@@ -699,12 +757,76 @@ export default function App() {
     // Perform initial auto-sync on load
     performSync('auto');
 
+    // Demo mode: poll every 5 seconds (no WebSocket alternative available)
+    // Supabase mode: poll every 30 seconds as fallback behind realtime WebSocket
+    const pollInterval = syncSettings.provider === 'supabase' ? 30000 : 5000;
+
     const interval = setInterval(() => {
       performSync('auto');
-    }, 15000);
+    }, pollInterval);
 
     return () => clearInterval(interval);
-  }, [syncSettings.enabled, syncSettings.demoKey, syncSettings.supabaseKey, performSync]);
+  }, [syncSettings.enabled, syncSettings.demoKey, syncSettings.supabaseKey, syncSettings.provider, performSync]);
+
+  // Supabase Realtime subscription — push-based sync for instant propagation
+  useEffect(() => {
+    // Clean up previous subscription
+    if (supabaseChannelRef.current) {
+      try {
+        supabaseClientRef.current?.removeChannel(supabaseChannelRef.current);
+      } catch (_) {}
+      supabaseChannelRef.current = null;
+    }
+
+    if (!syncSettings.enabled || syncSettings.provider !== 'supabase' || !syncSettings.supabaseUrl || !syncSettings.supabaseAnonKey) {
+      setRealtimeStatus('disconnected');
+      return;
+    }
+
+    const supabase = createClient(syncSettings.supabaseUrl, syncSettings.supabaseAnonKey, {
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      }
+    });
+    supabaseClientRef.current = supabase;
+
+    setRealtimeStatus('connecting');
+
+    const channel = supabase
+      .channel('signalflow-changes')
+      .on(
+        'postgres_changes' as any,
+        {
+          event: '*',
+          schema: 'public',
+          table: syncSettings.supabaseTable
+        },
+        (_payload: any) => {
+          // A change was detected on the server — pull latest data
+          if (!isSyncingRef.current) {
+            performSync('auto');
+          }
+        }
+      )
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setRealtimeStatus('error');
+        }
+      });
+
+    supabaseChannelRef.current = channel;
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch (_) {}
+      supabaseChannelRef.current = null;
+    };
+  }, [syncSettings.enabled, syncSettings.provider, syncSettings.supabaseUrl, syncSettings.supabaseAnonKey, syncSettings.supabaseTable, performSync]);
 
   // Edit Project State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -1668,22 +1790,76 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Google Drive Folder Locker */}
+                  {/* Google Drive File Locker */}
                   <div className="bg-charcoal-950/40 border border-charcoal-800 rounded-xl p-3.5 space-y-3">
                     <div className="flex justify-between items-center">
                       <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center space-x-2">
                         <FolderOpen size={13} className="text-sunset-500" />
                         <span>Google Drive File Locker</span>
                       </h3>
-                      {selectedProject.driveCreated && (
-                        <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-1.5 py-0.5 rounded">
-                          Linked
-                        </span>
-                      )}
+                      <div className="flex items-center space-x-2">
+                        {googleDriveUrl ? (
+                          <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-1.5 py-0.5 rounded">
+                            Configured
+                          </span>
+                        ) : (
+                          <span className="text-[9px] uppercase font-bold text-amber-400 bg-amber-950/50 border border-amber-800/40 px-1.5 py-0.5 rounded">
+                            Not configured
+                          </span>
+                        )}
+                        <button
+                          onClick={() => setShowDriveConfig(!showDriveConfig)}
+                          className="text-charcoal-500 hover:text-white transition-colors"
+                          title="Configure Google Drive"
+                        >
+                          <Edit size={12} />
+                        </button>
+                      </div>
                     </div>
 
+                    {/* Inline config for Google Drive URL */}
+                    {showDriveConfig && (
+                      <div className="bg-charcoal-950 border border-charcoal-800 rounded-lg p-3 space-y-2.5">
+                        <label className="text-[10px] font-bold text-charcoal-400 uppercase tracking-wider block">
+                          Google Drive Folder URL
+                        </label>
+                        <input
+                          type="url"
+                          value={googleDriveUrl}
+                          onChange={e => setGoogleDriveUrl(e.target.value)}
+                          placeholder="https://drive.google.com/drive/folders/ABC123"
+                          className="w-full bg-charcoal-900 border border-charcoal-800 rounded-lg px-2.5 py-2 text-xs text-white placeholder-charcoal-600 font-mono outline-none focus:border-sunset-500 transition-colors"
+                        />
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-charcoal-500">
+                            Paste a shared Google Drive folder link above.
+                          </span>
+                          <div className="flex space-x-2">
+                            {googleDriveUrl && (
+                              <button
+                                onClick={() => { setGoogleDriveUrl(''); setShowDriveConfig(false); }}
+                                className="text-[10px] font-bold text-charcoal-500 hover:text-red-400 transition-colors uppercase px-2 py-1"
+                              >
+                                Clear
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setShowDriveConfig(false)}
+                              className="text-[10px] font-bold text-sunset-500 hover:text-sunset-400 transition-colors uppercase px-2 py-1 bg-sunset-500/10 rounded"
+                            >
+                              Done
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <p className="text-[11px] text-charcoal-400">
-                      Automatic folder hierarchy built in your Google Drive under <span className="text-white font-semibold">SignalFlow Docs</span>:
+                      {googleDriveUrl ? (
+                        <>Folder hierarchy in your Google Drive under <span className="text-white font-semibold">SignalFlow Docs</span>:</>
+                      ) : (
+                        <>Configure a Google Drive folder above to link it. Folder template:</>
+                      )}
                     </p>
 
                     <div className="bg-charcoal-950 border border-charcoal-800/80 p-2.5 rounded-lg font-mono text-[10px] space-y-1 text-charcoal-300">
@@ -1713,13 +1889,26 @@ export default function App() {
                       </div>
                     </div>
 
-                    <button 
-                      onClick={() => showToast(`Opening Google Drive root folder: ${selectedProject.name}`)}
-                      className="w-full bg-charcoal-900 border border-charcoal-800 hover:border-sunset-500 text-charcoal-200 hover:text-white text-xs font-black tracking-wide p-2.5 rounded-lg flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
-                    >
-                      <ExternalLink size={13} />
-                      <span>OPEN GOOGLE DRIVE DIRECTORY</span>
-                    </button>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={openGoogleDriveFolder}
+                        className={`flex-1 border text-xs font-black tracking-wide p-2.5 rounded-lg flex items-center justify-center space-x-1.5 transition-colors shadow-sm ${
+                          googleDriveUrl
+                            ? 'bg-charcoal-900 border-charcoal-800 hover:border-sunset-500 text-charcoal-200 hover:text-white'
+                            : 'bg-charcoal-900/50 border-charcoal-800/60 text-charcoal-500 cursor-not-allowed'
+                        }`}
+                      >
+                        <ExternalLink size={13} />
+                        <span>OPEN GOOGLE DRIVE DIRECTORY</span>
+                      </button>
+                      <button
+                        onClick={copyDriveStructureToClipboard}
+                        className="bg-charcoal-900 border border-charcoal-800 hover:border-sunset-500 text-charcoal-200 hover:text-white text-xs font-black tracking-wide p-2.5 rounded-lg flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
+                      >
+                        <Clipboard size={13} />
+                        <span className="hidden sm:inline">COPY STRUCTURE</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Quick Site Notes (Auto-saves) */}
@@ -2385,6 +2574,7 @@ export default function App() {
                     onChange={(e) => {
                       const updated = { ...syncSettings, enabled: e.target.checked };
                       setSyncSettings(updated);
+                      syncSettingsRef.current = updated;
                       localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                       if (e.target.checked) {
                         setSyncStatus('syncing');
@@ -2410,6 +2600,7 @@ export default function App() {
                       onClick={() => {
                         const updated = { ...syncSettings, provider: 'demo' };
                         setSyncSettings(updated);
+                        syncSettingsRef.current = updated;
                         localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                         setSyncStatus('syncing');
                         setTimeout(() => performSync('auto'), 100);
@@ -2427,6 +2618,7 @@ export default function App() {
                       onClick={() => {
                         const updated = { ...syncSettings, provider: 'supabase' };
                         setSyncSettings(updated);
+                        syncSettingsRef.current = updated;
                         localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                         setSyncStatus('syncing');
                         setTimeout(() => performSync('auto'), 100);
@@ -2517,6 +2709,7 @@ export default function App() {
                               if (value) {
                                 const updated = { ...syncSettings, demoKey: value };
                                 setSyncSettings(updated);
+                                syncSettingsRef.current = updated;
                                 localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                                 showToast('Sync room key set. Fetching cloud workspace...');
                                 setTimeout(() => performSync('pull'), 100);
@@ -2558,6 +2751,7 @@ export default function App() {
                             onChange={(e) => {
                               const updated = { ...syncSettings, supabaseUrl: e.target.value.trim() };
                               setSyncSettings(updated);
+                              syncSettingsRef.current = updated;
                               localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                             }}
                             className="w-full bg-charcoal-900 border border-charcoal-800 text-white text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-indigo-700"
@@ -2575,6 +2769,7 @@ export default function App() {
                             onChange={(e) => {
                               const updated = { ...syncSettings, supabaseAnonKey: e.target.value.trim() };
                               setSyncSettings(updated);
+                              syncSettingsRef.current = updated;
                               localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                             }}
                             className="w-full bg-charcoal-900 border border-charcoal-800 text-white text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-indigo-700"
@@ -2592,6 +2787,7 @@ export default function App() {
                               onChange={(e) => {
                                 const updated = { ...syncSettings, supabaseTable: e.target.value.trim() };
                                 setSyncSettings(updated);
+                                syncSettingsRef.current = updated;
                                 localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                               }}
                               className="w-full bg-charcoal-900 border border-charcoal-800 text-white text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-indigo-700"
@@ -2608,6 +2804,7 @@ export default function App() {
                               onChange={(e) => {
                                 const updated = { ...syncSettings, supabaseKey: e.target.value.trim() };
                                 setSyncSettings(updated);
+                                syncSettingsRef.current = updated;
                                 localStorage.setItem('signalflow_sync_settings', JSON.stringify(updated));
                               }}
                               className="w-full bg-charcoal-900 border border-charcoal-800 text-white text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-indigo-700"
@@ -2670,7 +2867,7 @@ alter publication supabase_realtime add table ${syncSettings.supabaseTable || 's
             <div className="p-4 bg-charcoal-950 border-t border-charcoal-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
               
               {/* Connection Status */}
-              <div className="flex flex-col">
+              <div className="flex flex-col space-y-1">
                 <div className="flex items-center space-x-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${
                     !syncSettings.enabled 
@@ -2700,6 +2897,36 @@ alter publication supabase_realtime add table ${syncSettings.supabaseTable || 's
                   <span className="text-[9px] text-rose-400 mt-1 max-w-[250px] break-words leading-tight">
                     {syncError}
                   </span>
+                )}
+                {/* Realtime / connection mode indicator */}
+                {syncSettings.enabled && syncSettings.provider === 'supabase' && (
+                  <div className="flex items-center space-x-1.5 mt-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      realtimeStatus === 'connected'
+                        ? 'bg-emerald-400'
+                        : realtimeStatus === 'connecting'
+                          ? 'bg-amber-400 animate-pulse'
+                          : realtimeStatus === 'error'
+                            ? 'bg-rose-400'
+                            : 'bg-charcoal-600'
+                    }`} />
+                    <span className="text-[8px] text-charcoal-500 font-medium">
+                      {realtimeStatus === 'connected'
+                        ? '🔌 Realtime WebSocket Live'
+                        : realtimeStatus === 'connecting'
+                          ? '⏳ Connecting Realtime...'
+                          : realtimeStatus === 'error'
+                            ? '⚠️ Realtime offline (polling fallback 30s)'
+                            : '🔌 Realtime idle'}
+                    </span>
+                  </div>
+                )}
+                {syncSettings.enabled && syncSettings.provider === 'demo' && (
+                  <div className="flex items-center space-x-1.5 mt-0.5">
+                    <span className="text-[8px] text-charcoal-500 font-medium">
+                      ⏱️ Polling every 5s
+                    </span>
+                  </div>
                 )}
               </div>
 

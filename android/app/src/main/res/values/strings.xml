@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SignalFlow</string>
+    <string name="title_activity_main">SignalFlow</string>
+    <string name="package_name">com.signalflow.app</string>
+    <string name="custom_url_scheme">com.signalflow.app</string>
+</resources>
