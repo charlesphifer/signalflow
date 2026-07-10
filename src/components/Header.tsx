@@ -1,11 +1,12 @@
 import type { ActiveTab } from '../types';
 
+type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
+
 interface HeaderProps {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
-  syncEnabled: boolean;
-  syncStatus: string;
-  onSyncClick: () => void;
+  saveStatus: SaveStatus;
+  onSaveNow: () => void;
   onNewProject: () => void;
 }
 
@@ -16,13 +17,13 @@ const tabs: { id: ActiveTab; label: string; shortLabel: string }[] = [
   { id: 'docs-search', label: 'Technical Reference Vault', shortLabel: 'Tech Ref' },
 ];
 
-export default function Header({ activeTab, onTabChange, syncEnabled, syncStatus, onSyncClick, onNewProject }: HeaderProps) {
-  const syncIcon = () => {
-    if (!syncEnabled) return 'M20 13.5a8.5 8.5 0 0 1-17 0';
-    if (syncStatus === 'syncing') return 'M16.5 16.5 12 21l-4.5-4.5M12 3v18';
-    if (syncStatus === 'synced') return 'M9 12.5 11 14.5 15 9.5';
-    return 'M6 18 18 6M6 6l12 12';
-  };
+export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, onNewProject }: HeaderProps) {
+  const statusConfig = {
+    saved:   { label: 'Saved',       color: 'text-emerald-400', dot: 'bg-emerald-400' },
+    saving:  { label: 'Saving...',   color: 'text-amber-400',   dot: 'bg-amber-400 animate-pulse' },
+    error:   { label: 'Save Failed', color: 'text-rose-400',    dot: 'bg-rose-400' },
+    idle:    { label: 'Not Saved',   color: 'text-charcoal-500', dot: 'bg-charcoal-500' },
+  }[saveStatus];
 
   return (
     <header className="sticky top-0 z-40 bg-charcoal-900 border-b border-indigo-900 shadow-lg px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -46,10 +47,8 @@ export default function Header({ activeTab, onTabChange, syncEnabled, syncStatus
 
         {/* Mobile actions */}
         <div className="lg:hidden flex items-center space-x-1.5 shrink-0">
-          <button onClick={onSyncClick} className="p-2 rounded-lg border border-charcoal-800 text-charcoal-400">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d={syncIcon()} />
-            </svg>
+          <button onClick={onSaveNow} className="p-2 rounded-lg border border-charcoal-800 text-charcoal-400" title="Save now">
+            <span className={`h-2 w-2 rounded-full ${statusConfig.dot}`} />
           </button>
           <button onClick={onNewProject} className="bg-sunset-500 hover:bg-sunset-600 text-charcoal-950 text-xs font-black tracking-wider px-3.5 py-2 rounded-lg flex items-center space-x-1 shadow-md transition-all duration-200">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -80,10 +79,11 @@ export default function Header({ activeTab, onTabChange, syncEnabled, syncStatus
         ))}
       </div>
 
-      {/* Desktop sync + new project */}
+      {/* Desktop save status + new project */}
       <div className="hidden lg:flex items-center space-x-2 shrink-0">
-        <button onClick={onSyncClick} className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs font-bold border border-charcoal-800 text-charcoal-400 hover:text-charcoal-200 transition-all duration-200">
-          <span>{syncEnabled ? (syncStatus === 'synced' ? 'Cloud Synced' : syncStatus === 'syncing' ? 'Syncing...' : 'Sync Error') : 'Cloud Sync Setup'}</span>
+        <button onClick={onSaveNow} className="flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs font-bold border border-charcoal-800 hover:text-charcoal-200 transition-all duration-200">
+          <span className={`h-2 w-2 rounded-full ${statusConfig.dot}`} />
+          <span className={statusConfig.color}>{statusConfig.label}</span>
         </button>
         <button onClick={onNewProject} className="bg-sunset-500 hover:bg-sunset-600 text-charcoal-950 text-xs font-black tracking-wider px-4 py-2 rounded-lg flex items-center space-x-1.5 shadow-md transition-all duration-200">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

@@ -3,7 +3,7 @@ import type { Project, ActiveTab, ProjectType } from './types';
 import { DEFAULT_ASSESSMENT_CHECKLIST, DEFAULT_DESIGN_CHECKLIST } from './data/defaultChecklists';
 import { getCalendarEvents, getEmailTemplates, buildDriveStructureText } from './utils/helpers';
 import { useProjects } from './hooks/useProjects';
-import { useSync } from './hooks/useSync';
+import { loadProjects, saveProjects } from './hooks/useStorage';
 
 import Header from './components/Header';
 import ProjectSidebar from './components/ProjectSidebar';
@@ -11,11 +11,12 @@ import ProjectDetail from './components/ProjectDetail';
 import CalendarView from './components/CalendarView';
 import EmailVault from './components/EmailVault';
 import DocSearch from './components/DocSearch';
-import SyncModal from './components/SyncModal';
 import EditModal from './components/EditModal';
 import NewProjectWizard from './components/NewProjectWizard';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 import Toast from './components/Toast';
+
+type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
 
 export default function App() {
   const {
@@ -33,11 +34,43 @@ export default function App() {
     handleCreateProject: createNewProject,
   } = useProjects();
 
-  const {
-    syncSettings, setSyncSettings,
-    syncStatus, syncError, lastSyncedAt, isSyncingNow, realtimeStatus,
-    performSync,
-  } = useSync(projects, setProjects);
+  
+
+  // ── Persistence: load on mount, auto-save on change ───────────────────────
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const projectsRef = useRef(projects);
+  useEffect(() => { projectsRef.current = projects; }, [projects]);
+  const loadedRef = useRef(false);
+
+  // Load from API on mount (merge with localStorage as fallback)
+  useEffect(() => {
+    loadProjects().then(serverProjects => {
+      if (serverProjects.length > 0) {
+        setProjects(serverProjects);
+      }
+      loadedRef.current = true;
+      setSaveStatus('saved');
+    }).catch(() => {
+      loadedRef.current = true;
+      setSaveStatus('error');
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save on project changes (debounced 2s)
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+
+    setSaveStatus('saving');
+    saveTimer.current = setTimeout(() => {
+      saveProjects(projectsRef.current).then(ok => {
+        setSaveStatus(ok ? 'saved' : 'error');
+      });
+    }, 2000);
+
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [projects, saveProjects]);
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>('projects');
@@ -57,35 +90,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('signalflow_google_drive_url', googleDriveUrl);
   }, [googleDriveUrl]);
-
-  // ── Sync modal ────────────────────────────────────────────────────────────
-  const [showSyncModal, setShowSyncModal] = useState(false);
-
-  const handleSyncToggle = useCallback((enabled: boolean) => {
-    const updated = { ...syncSettings, enabled };
-    setSyncSettings(updated);
-    if (enabled) setTimeout(() => performSync('auto'), 100);
-  }, [syncSettings, setSyncSettings, performSync]);
-
-  const handleSetProvider = useCallback((provider: 'demo' | 'supabase') => {
-    const updated = { ...syncSettings, provider };
-    setSyncSettings(updated);
-    setTimeout(() => performSync('auto'), 100);
-  }, [syncSettings, setSyncSettings, performSync]);
-
-  const handleUpdateSettings = useCallback((settings: typeof syncSettings) => {
-    setSyncSettings(settings);
-  }, [setSyncSettings]);
-
-  const handleCreateRoom = useCallback(() => performSync('push'), [performSync]);
-  const handlePush = useCallback(() => performSync('push'), [performSync]);
-  const handlePull = useCallback(() => performSync('pull'), [performSync]);
-
-  const handleJoinRoom = useCallback((key: string) => {
-    const updated = { ...syncSettings, demoKey: key };
-    setSyncSettings(updated);
-    setTimeout(() => performSync('pull'), 100);
-  }, [syncSettings, setSyncSettings, performSync]);
 
   // ── Edit modal ────────────────────────────────────────────────────────────
   const [showEditModal, setShowEditModal] = useState(false);
@@ -297,15 +301,24 @@ export default function App() {
     showToast(`"${templateName}" copied to clipboard!`);
   }, [showToast]);
 
+  // ── Manual save trigger ───────────────────────────────────────────────────
+  const handleSaveNow = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSaveStatus('saving');
+    saveProjects(projects).then(ok => {
+      setSaveStatus(ok ? 'saved' : 'error');
+      showToast(ok ? 'Saved to server' : 'Save failed — check server');
+    });
+  }, [projects, saveProjects, showToast]);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-charcoal-950 text-charcoal-100 flex flex-col selection:bg-sunset-500 selection:text-white">
       <Header
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        syncEnabled={syncSettings.enabled}
-        syncStatus={syncStatus}
-        onSyncClick={() => setShowSyncModal(true)}
+        saveStatus={saveStatus}
+        onSaveNow={handleSaveNow}
         onNewProject={handleOpenWizard}
       />
 
@@ -323,14 +336,13 @@ export default function App() {
               sortBy={sortBy}
               sortOrder={sortOrder}
               viewMode={viewMode}
-              syncEnabled={syncSettings.enabled}
-              syncStatus={syncStatus}
+              saveStatus={saveStatus}
               onSelectProject={setSelectedProjectId}
               onSearchChange={setSearchTerm}
               onSortByChange={setSortBy}
               onSortOrderToggle={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
               onViewModeChange={setViewMode}
-              onSyncClick={() => setShowSyncModal(true)}
+              onSaveNow={handleSaveNow}
               onImport={(newProjects) => updateProjects(() => newProjects)}
               onToast={showToast}
             />
@@ -383,27 +395,6 @@ export default function App() {
       </main>
 
       {/* Modals */}
-      <SyncModal
-        showSyncModal={showSyncModal}
-        syncSettings={syncSettings}
-        syncStatus={syncStatus}
-        syncError={syncError}
-        lastSyncedAt={lastSyncedAt}
-        isSyncingNow={isSyncingNow}
-        realtimeStatus={realtimeStatus}
-        onClose={() => setShowSyncModal(false)}
-        onToggle={handleSyncToggle}
-        onSetProvider={handleSetProvider}
-        onUpdateSettings={handleUpdateSettings}
-        onCreateRoom={handleCreateRoom}
-        onJoinRoom={handleJoinRoom}
-        onCopyKey={key => { navigator.clipboard.writeText(key); showToast('Sync Key copied!'); }}
-        onCopySql={sql => { navigator.clipboard.writeText(sql); showToast('SQL query copied!'); }}
-        onPush={handlePush}
-        onPull={handlePull}
-        onToast={showToast}
-      />
-
       <EditModal
         showEditModal={showEditModal}
         editName={editName}

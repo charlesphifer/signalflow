@@ -1,0 +1,22 @@
+services:
+  frontend:
+    build: .
+    container_name: signalflow
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  api:
+    build: ./server
+    container_name: signalflow-api
+    restart: unless-stopped
+    volumes:
+      - signalflow_data:/data
+    environment:
+      - PORT=3000
+      - DATA_DIR=/data
+
+volumes:
+  signalflow_data:

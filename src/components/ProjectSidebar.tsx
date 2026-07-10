@@ -1,6 +1,8 @@
 import type { Project, SortField, SortOrder, ViewMode } from '../types';
 import DataBackupPanel from './DataBackupPanel';
 
+type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
+
 interface ProjectSidebarProps {
   projects: Project[];
   sortedProjects: Project[];
@@ -9,14 +11,13 @@ interface ProjectSidebarProps {
   sortBy: SortField;
   sortOrder: SortOrder;
   viewMode: ViewMode;
-  syncEnabled: boolean;
-  syncStatus: string;
+  saveStatus: SaveStatus;
   onSelectProject: (id: string) => void;
   onSearchChange: (term: string) => void;
   onSortByChange: (field: SortField) => void;
   onSortOrderToggle: () => void;
   onViewModeChange: (mode: ViewMode) => void;
-  onSyncClick: () => void;
+  onSaveNow: () => void;
   onImport: (projects: Project[]) => void;
   onToast: (msg: string) => void;
 }
@@ -28,17 +29,23 @@ export default function ProjectSidebar({
   sortBy,
   sortOrder,
   viewMode,
-  syncEnabled,
-  // syncStatus,
+  saveStatus,
   onSelectProject,
   onSearchChange,
   onSortByChange,
   onSortOrderToggle,
   onViewModeChange,
-  onSyncClick,
+  onSaveNow,
   onImport,
   onToast,
 }: ProjectSidebarProps) {
+  const statusConfig = {
+    saved:  { label: 'Data persisted on server',    color: 'text-emerald-400', bg: 'bg-emerald-950/40 border-emerald-800' },
+    saving: { label: 'Saving to server...',          color: 'text-amber-400',   bg: 'bg-amber-950/40 border-amber-800' },
+    error:  { label: 'Server save failed',           color: 'text-rose-400',    bg: 'bg-rose-950/40 border-rose-800' },
+    idle:   { label: 'Waiting for first save...',    color: 'text-charcoal-500', bg: 'bg-charcoal-950/40 border-charcoal-800' },
+  }[saveStatus];
+
   return (
     <div className="w-full md:w-[320px] flex flex-col gap-3 shrink-0">
       {/* Active / Archive Toggle */}
@@ -186,47 +193,39 @@ export default function ProjectSidebar({
         </div>
       </div>
 
-      {/* Cloud Sync Card */}
+      {/* Data Persistence Card */}
       <div className="bg-gradient-to-br from-charcoal-900 to-charcoal-950 border border-charcoal-800 rounded-xl p-3.5 shadow-md flex flex-col space-y-2.5">
         <div className="flex items-start justify-between">
           <div className="flex items-center space-x-2">
-            <div className={`p-1.5 rounded-lg border ${
-              syncEnabled ? 'bg-emerald-950/40 border-emerald-800 text-emerald-400' : 'bg-indigo-950/40 border-indigo-900 text-indigo-400'
-            }`}>
+            <div className={`p-1.5 rounded-lg border ${statusConfig.bg}`}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
               </svg>
             </div>
             <div>
-              <h3 className="text-xs font-black text-white uppercase tracking-wider">Cloud Sync Engine</h3>
-              <p className="text-[10px] text-charcoal-400 font-medium">
-                {syncEnabled ? 'Active Multi-Device Sync' : 'No sync configured yet'}
+              <h3 className="text-xs font-black text-white uppercase tracking-wider">Data Persistence</h3>
+              <p className={`text-[10px] font-medium ${statusConfig.color}`}>
+                {statusConfig.label}
               </p>
             </div>
           </div>
-          {syncEnabled && (
+          {saveStatus === 'saved' && (
             <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
           )}
         </div>
 
         <p className="text-[11px] leading-relaxed text-charcoal-300">
-          {syncEnabled
-            ? 'Synchronizing workspaces with cloud. Real-time collaboration is enabled.'
-            : 'Collaborate with colleagues on-site! Share assessment & design checklists across devices in real-time.'}
+          All project data is saved to a persistent volume on your server. Changes auto-save every few seconds.
         </p>
 
         <button
-          onClick={onSyncClick}
-          className={`w-full py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 text-center ${
-            syncEnabled
-              ? 'bg-charcoal-950 hover:bg-charcoal-900 border-charcoal-800 text-charcoal-300 hover:text-white'
-              : 'bg-indigo-600 hover:bg-indigo-700 border-indigo-500 text-white shadow-sm shadow-indigo-950/50'
-          }`}
+          onClick={onSaveNow}
+          className="w-full py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 text-center bg-charcoal-950 hover:bg-charcoal-900 border-charcoal-800 text-charcoal-300 hover:text-white"
         >
-          {syncEnabled ? 'Configure Sync Settings' : 'Set Up Real-Time Sync'}
+          {saveStatus === 'saving' ? 'Saving...' : 'Save Now'}
         </button>
       </div>
 
