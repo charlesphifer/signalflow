@@ -16,7 +16,9 @@ export const DEFAULT_ASSESSMENT_CHECKLIST: ChecklistItem[] = [
   { id: 'wa_13', task: 'Ensure project files are backed up on Sidekick and Tablet', completed: false },
   { id: 'wa_14', task: 'Generate and write technical wireless assessment report (2-week deadline)', completed: false },
   { id: 'wa_15', task: 'Upload final PDF report to Salesforce and send copy to PM', completed: false },
-  { id: 'wa_16', task: 'Attend PM-scheduled customer review call to finalize hand-off', completed: false },
+  { id: 'wa_16', task: 'Upload Report Copies to Wireless> Sites Teams Folder', completed: false },
+  { id: 'wa_17', task: 'Upload and share the assessment data on Ekahau cloud', completed: false },
+  { id: 'wa_18', task: 'Attend PM-scheduled customer review call to finalize hand-off', completed: false },
 ];
 
 export const DEFAULT_DESIGN_CHECKLIST: ChecklistItem[] = [
