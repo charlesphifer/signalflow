@@ -74,19 +74,6 @@ export const getMailtoUrl = (temp: { to?: string; cc?: string; subject: string; 
   return `mailto:${to}?cc=${cc}&subject=${subject}&body=${body}`;
 };
 
-// ─── Google Drive Folder Structure ──────────────────────────────────────────
-
-export const DRIVE_FOLDER_STRUCTURE = `📁 [Project Number] Project Name/
-├── 📂 01_Floor_Plans/     (AutoCAD DWGs, PDFs)
-├── 📂 02_Ekahau_Files/    (.esx projects, surveys)
-├── 📂 03_Site_Photos/     (AP placement proofs)
-└── 📂 04_Final_Reports/   (Completed PDF exports)`;
-
-export const buildDriveStructureText = (project: Project | null): string =>
-  DRIVE_FOLDER_STRUCTURE
-    .replace('[Project Number]', project?.number || 'XXXX')
-    .replace('Project Name', project?.name || 'Project');
-
 // ─── Smart Answer Search ────────────────────────────────────────────────────
 
 export const findSmartAnswer = (query: string): SmartAnswer | null => {

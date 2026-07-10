@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeStageFromChecklist, STAGE_ORDER, getGoogleCalendarUrl, getCalendarEvents, findSmartAnswer, getEmailTemplates, buildDriveStructureText } from '../utils/helpers';
+import { computeStageFromChecklist, STAGE_ORDER, getGoogleCalendarUrl, getCalendarEvents, findSmartAnswer, getEmailTemplates } from '../utils/helpers';
 import type { Project } from '../types';
 
 // ─── Shared mock project ────────────────────────────────────────────────────
@@ -23,7 +23,6 @@ const MOCK_PROJECT: Project = {
   itContact: { name: 'David Cho', email: 'dcho@test.org', phone: '555-0199' },
   notes: '',
   checklist: [],
-  driveCreated: true,
   calendarSynced: true,
 };
 
@@ -240,20 +239,4 @@ describe('getEmailTemplates', () => {
   });
 });
 
-// ─── buildDriveStructureText ─────────────────────────────────────────────────
-
-describe('buildDriveStructureText', () => {
-  it('replaces project number and name in the template', () => {
-    const text = buildDriveStructureText(MOCK_PROJECT);
-    expect(text).toContain('NK-2026-948 Test Hospital');
-    expect(text).toContain('01_Floor_Plans');
-    expect(text).toContain('02_Ekahau_Files');
-    expect(text).toContain('03_Site_Photos');
-    expect(text).toContain('04_Final_Reports');
-  });
-
-  it('falls back to XXXX and Project when project is null', () => {
-    const text = buildDriveStructureText(null);
-    expect(text).toContain('XXXX Project');
-  });
-});
+// ─── helpers.tsx exports ──────────────────────────────────────────────────

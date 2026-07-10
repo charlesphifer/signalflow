@@ -8,18 +8,11 @@ import {
 
 interface ProjectDetailProps {
   project: Project;
-  googleDriveUrl: string;
-  showDriveConfig: boolean;
   onToggleChecklist: (projectId: string, itemId: string) => void;
   onSaveNotes: (projectId: string, text: string) => void;
   onToggleArchive: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onOpenEdit: (project: Project) => void;
-  onOpenGoogleDrive: () => void;
-  onCopyDriveStructure: () => void;
-  onSetDriveUrl: (url: string) => void;
-  onSetShowDriveConfig: (show: boolean) => void;
-  onClearDriveUrl: () => void;
   onToast: (msg: string) => void;
 }
 
@@ -103,24 +96,6 @@ const SvgPhone = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const SvgFolderOpen = ({ className }: { className?: string }) => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /><line x1="1" y1="12" x2="23" y2="12" />
-  </svg>
-);
-
-const SvgExternalLink = ({ className }: { className?: string }) => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-  </svg>
-);
-
-const SvgClipboard = ({ className }: { className?: string }) => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-  </svg>
-);
-
 const SvgBookOpen = ({ className }: { className?: string }) => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
@@ -135,18 +110,11 @@ const STAGES = ['Kickoff', 'Pre-Work', 'On-Site', 'Reporting', 'Completed'] as c
 
 export default function ProjectDetail({
   project,
-  googleDriveUrl,
-  showDriveConfig,
   onToggleChecklist,
   onSaveNotes,
   onToggleArchive,
   onDeleteProject,
   onOpenEdit,
-  onOpenGoogleDrive,
-  onCopyDriveStructure,
-  onSetDriveUrl,
-  onSetShowDriveConfig,
-  onClearDriveUrl,
   onToast,
 }: ProjectDetailProps) {
   const [notesText, setNotesText] = useState(project.notes);
@@ -441,127 +409,6 @@ export default function ProjectDetail({
                   </span>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Google Drive File Locker */}
-          <div className="bg-charcoal-950/40 border border-charcoal-800 rounded-xl p-3.5 space-y-3">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center space-x-2">
-                <SvgFolderOpen className="text-sunset-500" />
-                <span>Google Drive File Locker</span>
-              </h3>
-              <div className="flex items-center space-x-2">
-                {googleDriveUrl ? (
-                  <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-800/40 px-1.5 py-0.5 rounded">
-                    Configured
-                  </span>
-                ) : (
-                  <span className="text-[9px] uppercase font-bold text-amber-400 bg-amber-950/50 border border-amber-800/40 px-1.5 py-0.5 rounded">
-                    Not configured
-                  </span>
-                )}
-                <button
-                  onClick={() => onSetShowDriveConfig(!showDriveConfig)}
-                  className="text-charcoal-500 hover:text-white transition-colors"
-                  title="Configure Google Drive"
-                >
-                  <SvgEdit />
-                </button>
-              </div>
-            </div>
-
-            {/* Inline config for Google Drive URL */}
-            {showDriveConfig && (
-              <div className="bg-charcoal-950 border border-charcoal-800 rounded-lg p-3 space-y-2.5">
-                <label className="text-[10px] font-bold text-charcoal-400 uppercase tracking-wider block">
-                  Google Drive Folder URL
-                </label>
-                <input
-                  type="url"
-                  value={googleDriveUrl}
-                  onChange={e => onSetDriveUrl(e.target.value)}
-                  placeholder="https://drive.google.com/drive/folders/ABC123"
-                  className="w-full bg-charcoal-900 border border-charcoal-800 rounded-lg px-2.5 py-2 text-xs text-white placeholder-charcoal-600 font-mono outline-none focus:border-sunset-500 transition-colors"
-                />
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-charcoal-500">
-                    Paste a shared Google Drive folder link above.
-                  </span>
-                  <div className="flex space-x-2">
-                    {googleDriveUrl && (
-                      <button
-                        onClick={() => onClearDriveUrl()}
-                        className="text-[10px] font-bold text-charcoal-500 hover:text-red-400 transition-colors uppercase px-2 py-1"
-                      >
-                        Clear
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onSetShowDriveConfig(false)}
-                      className="text-[10px] font-bold text-sunset-500 hover:text-sunset-400 transition-colors uppercase px-2 py-1 bg-sunset-500/10 rounded"
-                    >
-                      Done
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <p className="text-[11px] text-charcoal-400">
-              {googleDriveUrl ? (
-                <>Folder hierarchy in your Google Drive under <span className="text-white font-semibold">SignalFlow Docs</span>:</>
-              ) : (
-                <>Configure a Google Drive folder above to link it. Folder template:</>
-              )}
-            </p>
-
-            <div className="bg-charcoal-950 border border-charcoal-800/80 p-2.5 rounded-lg font-mono text-[10px] space-y-1 text-charcoal-300">
-              <div className="text-white font-bold flex items-center">
-                <SvgFolderOpen className="mr-1.5 text-sunset-500" />
-                <span>📁 [{project.number}] {project.name}/</span>
-              </div>
-              <div className="pl-5 text-indigo-400 flex items-center">
-                <span className="text-charcoal-700 mr-1">├──</span>
-                <span>📂 01_Floor_Plans/</span>
-                <span className="text-[9px] text-charcoal-500 ml-2">(AutoCAD DWGs, PDFs)</span>
-              </div>
-              <div className="pl-5 text-indigo-400 flex items-center">
-                <span className="text-charcoal-700 mr-1">├──</span>
-                <span>📂 02_Ekahau_Files/</span>
-                <span className="text-[9px] text-charcoal-500 ml-2">(.esx projects, surveys)</span>
-              </div>
-              <div className="pl-5 text-indigo-400 flex items-center">
-                <span className="text-charcoal-700 mr-1">├──</span>
-                <span>📂 03_Site_Photos/</span>
-                <span className="text-[9px] text-charcoal-500 ml-2">(AP placement proofs)</span>
-              </div>
-              <div className="pl-5 text-indigo-400 flex items-center">
-                <span className="text-charcoal-700 mr-1">└──</span>
-                <span>📂 04_Final_Reports/</span>
-                <span className="text-[9px] text-charcoal-500 ml-2">(Completed PDF exports)</span>
-              </div>
-            </div>
-
-            <div className="flex space-x-2">
-              <button
-                onClick={onOpenGoogleDrive}
-                className={`flex-1 border text-xs font-black tracking-wide p-2.5 rounded-lg flex items-center justify-center space-x-1.5 transition-colors shadow-sm ${
-                  googleDriveUrl
-                    ? 'bg-charcoal-900 border-charcoal-800 hover:border-sunset-500 text-charcoal-200 hover:text-white'
-                    : 'bg-charcoal-900/50 border-charcoal-800/60 text-charcoal-500 cursor-not-allowed'
-                }`}
-              >
-                <SvgExternalLink />
-                <span>OPEN GOOGLE DRIVE DIRECTORY</span>
-              </button>
-              <button
-                onClick={onCopyDriveStructure}
-                className="bg-charcoal-900 border border-charcoal-800 hover:border-sunset-500 text-charcoal-200 hover:text-white text-xs font-black tracking-wide p-2.5 rounded-lg flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
-              >
-                <SvgClipboard />
-                <span className="hidden sm:inline">COPY STRUCTURE</span>
-              </button>
             </div>
           </div>
 

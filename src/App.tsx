@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Project, ActiveTab, ProjectType } from './types';
 import { DEFAULT_ASSESSMENT_CHECKLIST, DEFAULT_DESIGN_CHECKLIST } from './data/defaultChecklists';
-import { getCalendarEvents, getEmailTemplates, buildDriveStructureText } from './utils/helpers';
+import { getCalendarEvents, getEmailTemplates } from './utils/helpers';
 import { useProjects } from './hooks/useProjects';
 import { loadProjects, saveProjects } from './hooks/useStorage';
 
@@ -80,16 +80,6 @@ export default function App() {
   const [docSearchQuery, setDocSearchQuery] = useState('');
   const [expandedDocId, setExpandedDocId] = useState<string | null>(null);
   const [expandedSectionTitle, setExpandedSectionTitle] = useState<string | null>(null);
-
-  // ── Google Drive config ───────────────────────────────────────────────────
-  const [googleDriveUrl, setGoogleDriveUrl] = useState<string>(
-    () => localStorage.getItem('signalflow_google_drive_url') || '',
-  );
-  const [showDriveConfig, setShowDriveConfig] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem('signalflow_google_drive_url', googleDriveUrl);
-  }, [googleDriveUrl]);
 
   // ── Edit modal ────────────────────────────────────────────────────────────
   const [showEditModal, setShowEditModal] = useState(false);
@@ -178,7 +168,6 @@ export default function App() {
   const [wizSiteEnd, setWizSiteEnd] = useState('');
   const [wizGoLive, setWizGoLive] = useState('');
   const [wizType, setWizType] = useState<ProjectType>('Wireless Assessment');
-  const [wizDrive, setWizDrive] = useState(true);
   const [wizCalendar, setWizCalendar] = useState(true);
 
   const handleOpenWizard = useCallback(() => {
@@ -199,7 +188,6 @@ export default function App() {
     setWizSiteEnd('');
     setWizGoLive('');
     setWizType('Wireless Assessment');
-    setWizDrive(true);
     setWizCalendar(true);
     setShowWizard(true);
   }, []);
@@ -226,7 +214,6 @@ export default function App() {
       checklist: wizType === 'Wireless Assessment'
         ? DEFAULT_ASSESSMENT_CHECKLIST.map(item => ({ ...item }))
         : DEFAULT_DESIGN_CHECKLIST.map(item => ({ ...item })),
-      driveCreated: wizDrive,
       calendarSynced: wizCalendar,
       isArchived: false,
     };
@@ -237,7 +224,7 @@ export default function App() {
   }, [wizName, wizNumber, wizCity, wizState, wizCredentials, wizType,
       wizPmName, wizAeName, wizItName, wizItEmail, wizItPhone,
       wizTravelStart, wizTravelEnd, wizSiteStart, wizSiteEnd, wizGoLive,
-      wizDrive, wizCalendar, createNewProject]);
+      wizCalendar, createNewProject]);
 
   // ── Toast notifications ──────────────────────────────────────────────────
   const [notification, setNotification] = useState<string | null>(null);
@@ -275,26 +262,6 @@ export default function App() {
   // ── Calendar events (memoized from derived data) ──────────────────────────
   const calendarEvents = getCalendarEvents(projects);
   const emailTemplates = getEmailTemplates(selectedProject);
-
-  // ── Drive helpers ─────────────────────────────────────────────────────────
-  const copyDriveStructureToClipboard = useCallback(async () => {
-    const text = buildDriveStructureText(selectedProject);
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(`Folder structure copied for ${selectedProject.number} - ${selectedProject.name}`);
-    } catch {
-      showToast('Could not copy to clipboard');
-    }
-  }, [selectedProject, showToast]);
-
-  const openGoogleDriveFolder = useCallback(() => {
-    if (googleDriveUrl) {
-      window.open(googleDriveUrl, '_blank', 'noopener,noreferrer');
-      showToast('Opening Google Drive folder...');
-    } else {
-      showToast('No Google Drive folder configured.');
-    }
-  }, [googleDriveUrl, showToast]);
 
   const handleCopyTemplate = useCallback((text: string, templateName: string) => {
     navigator.clipboard.writeText(text);
@@ -350,18 +317,11 @@ export default function App() {
             <div className="flex-1 bg-charcoal-900 border border-charcoal-800 rounded-xl shadow-md flex flex-col overflow-hidden">
               <ProjectDetail
                 project={selectedProject}
-                googleDriveUrl={googleDriveUrl}
-                showDriveConfig={showDriveConfig}
                 onToggleChecklist={handleToggleChecklist}
                 onSaveNotes={handleSaveNotes}
                 onToggleArchive={handleToggleArchive}
                 onDeleteProject={handleRequestDelete}
                 onOpenEdit={handleOpenEditModal}
-                onOpenGoogleDrive={openGoogleDriveFolder}
-                onCopyDriveStructure={copyDriveStructureToClipboard}
-                onSetDriveUrl={setGoogleDriveUrl}
-                onSetShowDriveConfig={setShowDriveConfig}
-                onClearDriveUrl={() => { setGoogleDriveUrl(''); setShowDriveConfig(false); }}
                 onToast={showToast}
               />
             </div>
@@ -454,7 +414,6 @@ export default function App() {
         wizSiteEnd={wizSiteEnd}
         wizGoLive={wizGoLive}
         wizType={wizType}
-        wizDrive={wizDrive}
         wizCalendar={wizCalendar}
         onClose={() => setShowWizard(false)}
         onSetName={setWizName}
@@ -473,7 +432,6 @@ export default function App() {
         onSetSiteEnd={setWizSiteEnd}
         onSetGoLive={setWizGoLive}
         onSetType={setWizType}
-        onSetDrive={setWizDrive}
         onSetCalendar={setWizCalendar}
         onNext={() => setWizardStep(prev => Math.min(4, prev + 1))}
         onBack={() => setWizardStep(prev => Math.max(1, prev - 1))}

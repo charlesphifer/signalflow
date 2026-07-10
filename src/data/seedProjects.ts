@@ -24,7 +24,6 @@ export const SEED_PROJECTS: Project[] = [
       ...item,
       completed: idx < 10,
     })),
-    driveCreated: true,
     calendarSynced: true,
   },
   {
@@ -49,7 +48,6 @@ export const SEED_PROJECTS: Project[] = [
       ...item,
       completed: idx < 3,
     })),
-    driveCreated: true,
     calendarSynced: true,
   },
   {
@@ -74,7 +72,6 @@ export const SEED_PROJECTS: Project[] = [
       ...item,
       completed: idx < 13,
     })),
-    driveCreated: true,
     calendarSynced: true,
   },
 ];

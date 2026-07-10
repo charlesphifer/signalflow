@@ -37,7 +37,6 @@ export interface Project {
   itContact: Contact;
   notes: string;
   checklist: ChecklistItem[];
-  driveCreated: boolean;
   calendarSynced: boolean;
   isArchived?: boolean;
 }

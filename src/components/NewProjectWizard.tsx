@@ -19,7 +19,6 @@ interface WizardProps {
   wizSiteEnd: string;
   wizGoLive: string;
   wizType: ProjectType;
-  wizDrive: boolean;
   wizCalendar: boolean;
   onClose: () => void;
   onSetName: (v: string) => void;
@@ -38,7 +37,6 @@ interface WizardProps {
   onSetSiteEnd: (v: string) => void;
   onSetGoLive: (v: string) => void;
   onSetType: (v: ProjectType) => void;
-  onSetDrive: (v: boolean) => void;
   onSetCalendar: (v: boolean) => void;
   onNext: () => void;
   onBack: () => void;
@@ -49,11 +47,11 @@ export default function NewProjectWizard({
   showWizard, wizardStep, wizName, wizNumber, wizCity, wizState, wizCredentials,
   wizPmName, wizAeName, wizItName, wizItEmail, wizItPhone,
   wizTravelStart, wizTravelEnd, wizSiteStart, wizSiteEnd, wizGoLive,
-  wizType, wizDrive, wizCalendar,
+  wizType, wizCalendar,
   onClose, onSetName, onSetNumber, onSetCity, onSetState, onSetCredentials,
   onSetPmName, onSetAeName, onSetItName, onSetItEmail, onSetItPhone,
   onSetTravelStart, onSetTravelEnd, onSetSiteStart, onSetSiteEnd, onSetGoLive,
-  onSetType, onSetDrive, onSetCalendar, onNext, onBack, onCreate,
+  onSetType, onSetCalendar, onNext, onBack, onCreate,
 }: WizardProps) {
   if (!showWizard) return null;
 
@@ -215,16 +213,7 @@ export default function NewProjectWizard({
               <div className="space-y-2.5 pt-2">
                 <label className="block text-[10px] font-bold text-charcoal-400 uppercase tracking-wider">Initialization Routines</label>
                 <div className="bg-charcoal-950/60 p-3.5 border border-charcoal-800 rounded-xl space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-white block">📂 Build Google Drive Structure</span>
-                      <span className="text-[10px] text-charcoal-500">Create folder hierarchy automatically.</span>
-                    </div>
-                    <button onClick={() => onSetDrive(!wizDrive)} className={`w-11 h-6 rounded-full p-1 transition-all duration-300 flex items-center ${wizDrive ? 'bg-sunset-500 justify-end' : 'bg-charcoal-800 justify-start'}`}>
-                      <span className="w-4 h-4 bg-charcoal-950 rounded-full shadow" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-charcoal-800/60 pt-3">
+                  <div className="flex items-center justify-between border-charcoal-800/60">
                     <div>
                       <span className="text-xs font-bold text-white block">📅 Sync Travel to Outlook</span>
                       <span className="text-[10px] text-charcoal-500">Block dates as "Busy" so PMs cannot schedule meetings.</span>
