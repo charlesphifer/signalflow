@@ -2,11 +2,11 @@
   "name": "SignalFlow Deployment Workspace",
   "short_name": "SignalFlow",
   "description": "Nihon Kohden Wireless Deployment Assistant",
-  "start_url": "/",
+  "start_url": "/signalflow/",
   "display": "standalone",
-  "orientation": "any",
-  "background_color": "#0a0a0c",
-  "theme_color": "#111217",
+  "orientation": "portrait",
+  "theme_color": "#0b0b0f",
+  "background_color": "#0b0b0f",
   "icons": [
     {
       "src": "/favicon.svg",
