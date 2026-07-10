@@ -12,6 +12,7 @@ interface ProjectSidebarProps {
   sortOrder: SortOrder;
   viewMode: ViewMode;
   saveStatus: SaveStatus;
+  saveError: string | null;
   onSelectProject: (id: string) => void;
   onSearchChange: (term: string) => void;
   onSortByChange: (field: SortField) => void;
@@ -30,6 +31,7 @@ export default function ProjectSidebar({
   sortOrder,
   viewMode,
   saveStatus,
+  saveError,
   onSelectProject,
   onSearchChange,
   onSortByChange,
@@ -221,11 +223,21 @@ export default function ProjectSidebar({
           All project data is saved to a persistent volume on your server. Changes auto-save every few seconds.
         </p>
 
+        {saveStatus === 'error' && saveError && (
+          <p className="text-[10px] font-bold text-rose-400 bg-rose-950/30 border border-rose-900/40 rounded-lg px-2.5 py-1.5">
+            ⚠ {saveError}
+          </p>
+        )}
+
         <button
           onClick={onSaveNow}
-          className="w-full py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 text-center bg-charcoal-950 hover:bg-charcoal-900 border-charcoal-800 text-charcoal-300 hover:text-white"
+          className={`w-full py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 text-center ${
+            saveStatus === 'error'
+              ? 'bg-rose-600 hover:bg-rose-700 border-rose-500 text-white shadow-sm shadow-rose-950/50'
+              : 'bg-charcoal-950 hover:bg-charcoal-900 border-charcoal-800 text-charcoal-300 hover:text-white'
+          }`}
         >
-          {saveStatus === 'saving' ? 'Saving...' : 'Save Now'}
+          {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'error' ? 'Retry Save' : 'Save Now'}
         </button>
       </div>
 

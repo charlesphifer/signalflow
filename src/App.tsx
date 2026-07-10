@@ -38,10 +38,12 @@ export default function App() {
 
   // ── Persistence: load on mount, auto-save on change ───────────────────────
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const projectsRef = useRef(projects);
   useEffect(() => { projectsRef.current = projects; }, [projects]);
   const loadedRef = useRef(false);
+  const backoffRef = useRef(2000); // starts at 2s, doubles on failure
 
   // Load from API on mount (merge with localStorage as fallback)
   useEffect(() => {
@@ -51,23 +53,34 @@ export default function App() {
       }
       loadedRef.current = true;
       setSaveStatus('saved');
+      setSaveError(null);
     }).catch(() => {
       loadedRef.current = true;
       setSaveStatus('error');
+      setSaveError('Cannot reach server — check your connection');
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-save on project changes (debounced 2s)
+  // Auto-save on project changes (debounced, exponential backoff on failure)
   useEffect(() => {
     if (!loadedRef.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
 
     setSaveStatus('saving');
+    const delay = backoffRef.current;
     saveTimer.current = setTimeout(() => {
       saveProjects(projectsRef.current).then(ok => {
-        setSaveStatus(ok ? 'saved' : 'error');
+        if (ok) {
+          setSaveStatus('saved');
+          setSaveError(null);
+          backoffRef.current = 2000; // reset on success
+        } else {
+          setSaveStatus('error');
+          setSaveError('Save failed — retrying...');
+          backoffRef.current = Math.min(backoffRef.current * 2, 30000); // double, max 30s
+        }
       });
-    }, 2000);
+    }, delay);
 
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [projects, saveProjects]);
@@ -272,9 +285,17 @@ export default function App() {
   const handleSaveNow = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaveStatus('saving');
+    setSaveError(null);
     saveProjects(projects).then(ok => {
-      setSaveStatus(ok ? 'saved' : 'error');
-      showToast(ok ? 'Saved to server' : 'Save failed — check server');
+      if (ok) {
+        setSaveStatus('saved');
+        backoffRef.current = 2000;
+        showToast('Saved to server');
+      } else {
+        setSaveStatus('error');
+        setSaveError('Save failed — check server');
+        showToast('Save failed — check server');
+      }
     });
   }, [projects, saveProjects, showToast]);
 
@@ -304,6 +325,7 @@ export default function App() {
               sortOrder={sortOrder}
               viewMode={viewMode}
               saveStatus={saveStatus}
+              saveError={saveError}
               onSelectProject={setSelectedProjectId}
               onSearchChange={setSearchTerm}
               onSortByChange={setSortBy}
