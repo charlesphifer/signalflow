@@ -4,6 +4,57 @@ export interface Contact {
   phone: string;
 }
 
+export interface Person {
+  id: string;
+  name: string;
+  roles: Array<'AM' | 'PM'>;
+  email: string;
+  phone: string;
+  company: string;
+}
+
+export interface LineItem {
+  line: number;
+  qty: number;
+  um: string;
+  code: string;
+  description: string;
+  unitPrice?: number;
+  extendedPrice?: number;
+}
+
+export type DraftStatus = 'pending' | 'confirmed' | 'dismissed';
+export type DraftProjectType = 'Wireless Assessment' | 'Wireless Design' | 'Unknown';
+
+export interface PendingDraft {
+  id: string;
+  status: DraftStatus;
+  receivedAt: string;
+  source: 'email';
+  emailSubject: string;
+  emailFrom: string;
+  accountName: string;
+  customerPo: string;
+  quoteNumber: string;
+  salesOrderNumbers: string[];
+  nkProjectNumbers: string[];
+  salesforceUrl: string;
+  opportunityOwner: string;
+  billTo: string;
+  shipTo: string;
+  salesRep: string;
+  enteredBy: string;
+  orderDate: string;
+  requestedDate: string;
+  orderTotal?: number;
+  suggestedType: DraftProjectType;
+  qualifyingLineItems: LineItem[];
+  lineItems: LineItem[];
+  notes: string[];
+  reviewFlags: string[];
+  attachments: { filename: string; soNumber?: string }[];
+}
+
 export interface ChecklistItem {
   id: string;
   task: string;
@@ -16,7 +67,7 @@ export type ProjectStage = 'Kickoff' | 'Pre-Work' | 'On-Site' | 'Reporting' | 'C
 export type SortField = 'name' | 'number' | 'goLive' | 'stage';
 export type SortOrder = 'asc' | 'desc';
 export type ViewMode = 'active' | 'archived';
-export type ActiveTab = 'projects' | 'calendar' | 'email-vault' | 'docs-search';
+export type ActiveTab = 'projects' | 'calendar' | 'email-vault' | 'docs-search' | 'intake' | 'people';
 
 export interface Project {
   id: string;
@@ -35,6 +86,15 @@ export interface Project {
   pm: { name: string };
   ae: { name: string };
   itContact: Contact;
+  soNumber: string;
+  customerPo: string;
+  quoteNumber: string;
+  nkProjectNumber: string;
+  salesforceUrl: string;
+  source: 'manual' | 'email';
+  siteAddress: string;
+  lat?: number;
+  lon?: number;
   notes: string;
   checklist: ChecklistItem[];
   calendarSynced: boolean;

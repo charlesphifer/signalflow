@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Project, ActiveTab, ProjectType } from './types';
+import type { Project, ActiveTab, ProjectType, Person, PendingDraft } from './types';
 import { DEFAULT_ASSESSMENT_CHECKLIST, DEFAULT_DESIGN_CHECKLIST } from './data/defaultChecklists';
 import { getCalendarEvents, getEmailTemplates } from './utils/helpers';
 import { useProjects } from './hooks/useProjects';
 import { loadProjects, saveProjects } from './hooks/useStorage';
+import { loadPeople, savePeople, loadDrafts, updateDraft } from './hooks/useIntake';
+import IntakeQueue, { draftToProject } from './components/IntakeQueue';
+import PeopleManager from './components/PeopleManager';
 
 import Header from './components/Header';
 import ProjectSidebar from './components/ProjectSidebar';
@@ -88,6 +91,28 @@ export default function App() {
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<ActiveTab>('projects');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('1');
+
+  // ── Intake: people roster + pending drafts ────────────────────────────────
+  const [people, setPeople] = useState<Person[]>([]);
+  const [drafts, setDrafts] = useState<PendingDraft[]>([]);
+  const refreshIntake = useCallback(() => {
+    loadPeople().then(setPeople);
+    loadDrafts().then(setDrafts);
+  }, []);
+  useEffect(() => { refreshIntake(); }, [refreshIntake]);
+  // Poll for new drafts every 60s
+  useEffect(() => {
+    const t = setInterval(() => { loadDrafts().then(setDrafts); }, 60000);
+    return () => clearInterval(t);
+  }, []);
+  const pendingDraftCount = drafts.filter(d => d.status === 'pending').length;
+
+  const handleSavePeople = useCallback(async (updated: Person[]) => {
+    const ok = await savePeople(updated);
+    if (ok) setPeople(updated);
+    return ok;
+  }, []);
+
 
   // ── Search / modal state for DocSearch ────────────────────────────────────
   const [docSearchQuery, setDocSearchQuery] = useState('');
@@ -223,6 +248,13 @@ export default function App() {
       pm: { name: wizPmName },
       ae: { name: wizAeName },
       itContact: { name: wizItName || 'TBD', email: wizItEmail || 'TBD', phone: wizItPhone || 'TBD' },
+      soNumber: '',
+      customerPo: '',
+      quoteNumber: '',
+      nkProjectNumber: '',
+      salesforceUrl: '',
+      source: 'manual',
+      siteAddress: '',
       notes: 'Project created via Wizard. Checklist generated automatically.',
       checklist: wizType === 'Wireless Assessment'
         ? DEFAULT_ASSESSMENT_CHECKLIST.map(item => ({ ...item }))
@@ -248,6 +280,16 @@ export default function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setNotification(null), 3000);
   }, []);
+
+  const handleConfirmDraft = useCallback(async (draft: PendingDraft, overrides: { projectType: 'Wireless Assessment' | 'Wireless Design' | 'Unknown'; projectNumber: string; pmName: string; amName: string }) => {
+    if (overrides.projectType === 'Unknown') return;
+    const newProj = draftToProject(draft, overrides);
+    updateProjects(prev => [...prev, newProj]);
+    setSelectedProjectId(newProj.id);
+    await updateDraft(draft.id, { status: 'confirmed' });
+    loadDrafts().then(setDrafts);
+    showToast(`Project created from SO ${draft.salesOrderNumbers[0] || ''}`.trim());
+  }, [updateProjects, showToast]);
 
   // ── Delete confirmation modal ─────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
@@ -308,6 +350,7 @@ export default function App() {
         saveStatus={saveStatus}
         onSaveNow={handleSaveNow}
         onNewProject={handleOpenWizard}
+        pendingDraftCount={pendingDraftCount}
       />
 
       <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-sunset-500 to-indigo-800 w-full" />
@@ -348,6 +391,26 @@ export default function App() {
               />
             </div>
           </>
+        )}
+
+        {/* TAB: NK Order Intake */}
+        {activeTab === 'intake' && (
+          <IntakeQueue
+            drafts={drafts}
+            people={people}
+            onRefresh={refreshIntake}
+            onConfirm={handleConfirmDraft}
+            onToast={showToast}
+          />
+        )}
+
+        {/* TAB: People Roster */}
+        {activeTab === 'people' && (
+          <PeopleManager
+            people={people}
+            onSave={handleSavePeople}
+            onToast={showToast}
+          />
         )}
 
         {/* TAB: Calendar */}

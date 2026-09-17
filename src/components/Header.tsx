@@ -8,16 +8,19 @@ interface HeaderProps {
   saveStatus: SaveStatus;
   onSaveNow: () => void;
   onNewProject: () => void;
+  pendingDraftCount: number;
 }
 
 const tabs: { id: ActiveTab; label: string; shortLabel: string }[] = [
   { id: 'projects', label: 'Deployment Dashboard', shortLabel: 'Dashboard' },
+  { id: 'intake', label: 'NK Order Intake', shortLabel: 'Intake' },
+  { id: 'people', label: 'People Roster', shortLabel: 'People' },
   { id: 'calendar', label: 'Interactive Calendar', shortLabel: 'Calendar' },
   { id: 'email-vault', label: 'Email Boilerplate Vault', shortLabel: 'Email Vault' },
   { id: 'docs-search', label: 'Technical Reference Vault', shortLabel: 'Tech Ref' },
 ];
 
-export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, onNewProject }: HeaderProps) {
+export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, onNewProject, pendingDraftCount }: HeaderProps) {
   const statusConfig = {
     saved:   { label: 'Saved',       color: 'text-emerald-400', dot: 'bg-emerald-400' },
     saving:  { label: 'Saving...',   color: 'text-amber-400',   dot: 'bg-amber-400 animate-pulse' },
@@ -75,6 +78,11 @@ export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, 
           >
             <span className="hidden sm:inline">{tab.label}</span>
             <span className="sm:hidden">{tab.shortLabel}</span>
+            {tab.id === 'intake' && pendingDraftCount > 0 && (
+              <span className="bg-sunset-500 text-charcoal-950 text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
+                {pendingDraftCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
