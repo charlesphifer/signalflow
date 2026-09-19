@@ -7,4 +7,5 @@ __MACOSX
 .DS_Store
 *.md
 android
-dist
+dist.env
+.env

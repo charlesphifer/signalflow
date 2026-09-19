@@ -19,6 +19,7 @@ const MOCK_PROJECT: Project = {
   siteEnd: '2026-07-15',
   goLiveDate: '2026-08-10',
   pm: { name: 'Sarah Jenkins' },
+  assignedEngineer: '',
   ae: { name: 'Marcus Vance' },
   itContact: { name: 'David Cho', email: 'dcho@test.org', phone: '555-0199' },
   soNumber: '',

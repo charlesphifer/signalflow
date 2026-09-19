@@ -7,7 +7,7 @@ export interface Contact {
 export interface Person {
   id: string;
   name: string;
-  roles: Array<'AM' | 'PM'>;
+  roles: Array<'AM' | 'PM' | 'Engineer'>;
   email: string;
   phone: string;
   company: string;
@@ -55,11 +55,34 @@ export interface PendingDraft {
   attachments: { filename: string; soNumber?: string }[];
 }
 
+export type UserRole = 'admin' | 'engineer' | 'viewer';
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  roles: UserRole[];
+  displayName: string;
+}
+
 export interface ChecklistItem {
   id: string;
   task: string;
   completed: boolean;
   dueDate?: string;
+  assignedTo?: string;
+  completedBy?: string;
+}
+
+export interface AuthSession {
+  token: string;
+  user: AuthUser;
+}
+
+export interface ManagedUser {
+  id: string;
+  username: string;
+  roles: UserRole[];
+  displayName: string;
 }
 
 export type ProjectType = 'Wireless Assessment' | 'Wireless Design';
@@ -67,7 +90,7 @@ export type ProjectStage = 'Kickoff' | 'Pre-Work' | 'On-Site' | 'Reporting' | 'C
 export type SortField = 'name' | 'number' | 'goLive' | 'stage';
 export type SortOrder = 'asc' | 'desc';
 export type ViewMode = 'active' | 'archived';
-export type ActiveTab = 'projects' | 'calendar' | 'email-vault' | 'docs-search' | 'intake' | 'people';
+export type ActiveTab = 'projects' | 'calendar' | 'email-vault' | 'docs-search' | 'intake' | 'people' | 'user-admin';
 
 export interface Project {
   id: string;
@@ -85,6 +108,7 @@ export interface Project {
   goLiveDate: string;
   pm: { name: string };
   ae: { name: string };
+  assignedEngineer: string;
   itContact: Contact;
   soNumber: string;
   customerPo: string;

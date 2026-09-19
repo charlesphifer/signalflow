@@ -17,6 +17,8 @@ services:
     environment:
       - PORT=3000
       - DATA_DIR=/data
+      - JWT_SECRET=${SIGNALFLOW_JWT_SECRET:-change-me-in-env-file}
+      - PARSER_TOKEN=${SIGNALFLOW_PARSER_TOKEN:-change-me-parser-token}
 
 volumes:
   signalflow_data:

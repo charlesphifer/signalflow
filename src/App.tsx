@@ -5,8 +5,12 @@ import { getCalendarEvents, getEmailTemplates } from './utils/helpers';
 import { useProjects } from './hooks/useProjects';
 import { loadProjects, saveProjects } from './hooks/useStorage';
 import { loadPeople, savePeople, loadDrafts, updateDraft } from './hooks/useIntake';
+import { getStoredSession, logout as authLogout, canEdit } from './hooks/useAuth';
+import type { AuthSession } from './types';
 import IntakeQueue, { draftToProject } from './components/IntakeQueue';
 import PeopleManager from './components/PeopleManager';
+import UserAdmin from './components/UserAdmin';
+import LoginScreen from './components/LoginScreen';
 
 import Header from './components/Header';
 import ProjectSidebar from './components/ProjectSidebar';
@@ -22,7 +26,15 @@ import Toast from './components/Toast';
 type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
 
 export default function App() {
+  // ── Auth ───────────────────────────────────────────────────────────────────
+  const [session, setSession] = useState<AuthSession | null>(() => getStoredSession());
+  const handleLoginSuccess = useCallback(() => setSession(getStoredSession()), []);
+  const handleLogout = useCallback(() => { authLogout(); setSession(null); }, []);
+  const user = session?.user ?? null;
+  const editable = canEdit(user);
+
   const {
+
     projects, setProjects, updateProjects,
     searchTerm, setSearchTerm,
     sortBy, setSortBy,
@@ -246,6 +258,7 @@ export default function App() {
       siteEnd: wizSiteEnd || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       goLiveDate: wizGoLive || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       pm: { name: wizPmName },
+      assignedEngineer: '',
       ae: { name: wizAeName },
       itContact: { name: wizItName || 'TBD', email: wizItEmail || 'TBD', phone: wizItPhone || 'TBD' },
       soNumber: '',
@@ -281,7 +294,22 @@ export default function App() {
     toastTimer.current = setTimeout(() => setNotification(null), 3000);
   }, []);
 
-  const handleConfirmDraft = useCallback(async (draft: PendingDraft, overrides: { projectType: 'Wireless Assessment' | 'Wireless Design' | 'Unknown'; projectNumber: string; pmName: string; amName: string }) => {
+  // Engineers = people with Engineer role
+  const engineers = people.filter(p => p.roles.includes('Engineer')).map(p => p.name);
+
+  const handleAssignTask = useCallback((projectId: string, itemId: string, engineer: string) => {
+    updateProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      return {
+        ...p,
+        checklist: p.checklist.map(item =>
+          item.id === itemId ? { ...item, assignedTo: engineer || undefined } : item,
+        ),
+      };
+    }));
+  }, [updateProjects]);
+
+  const handleConfirmDraft = useCallback(async (draft: PendingDraft, overrides: { projectType: 'Wireless Assessment' | 'Wireless Design' | 'Unknown'; projectNumber: string; pmName: string; amName: string; engineerName?: string }) => {
     if (overrides.projectType === 'Unknown') return;
     const newProj = draftToProject(draft, overrides);
     updateProjects(prev => [...prev, newProj]);
@@ -342,6 +370,10 @@ export default function App() {
   }, [projects, saveProjects, showToast]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  if (!session) {
+    return <LoginScreen onLogin={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-charcoal-950 text-charcoal-100 flex flex-col selection:bg-sunset-500 selection:text-white">
       <Header
@@ -351,6 +383,8 @@ export default function App() {
         onSaveNow={handleSaveNow}
         onNewProject={handleOpenWizard}
         pendingDraftCount={pendingDraftCount}
+        user={user!}
+        onLogout={handleLogout}
       />
 
       <div className="h-0.5 bg-gradient-to-r from-indigo-500 via-sunset-500 to-indigo-800 w-full" />
@@ -383,6 +417,9 @@ export default function App() {
               <ProjectDetail
                 project={selectedProject}
                 onToggleChecklist={handleToggleChecklist}
+                onAssignTask={handleAssignTask}
+                engineers={engineers}
+                readOnly={!editable}
                 onSaveNotes={handleSaveNotes}
                 onToggleArchive={handleToggleArchive}
                 onDeleteProject={handleRequestDelete}
@@ -411,6 +448,11 @@ export default function App() {
             onSave={handleSavePeople}
             onToast={showToast}
           />
+        )}
+
+        {/* TAB: User Admin (admin only) */}
+        {activeTab === 'user-admin' && user && (
+          <UserAdmin currentUser={user} onToast={showToast} />
         )}
 
         {/* TAB: Calendar */}

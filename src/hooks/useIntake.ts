@@ -1,11 +1,12 @@
 import type { Person, PendingDraft } from '../types';
+import { authHeaders, getStoredSession } from './useAuth';
 
 const PEOPLE_API = '/api/people';
 const DRAFTS_API = '/api/drafts';
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
-    const res = await fetch(url, init);
+    const res = await fetch(url, { ...init, headers: { ...(init?.headers || {}), ...authHeaders(getStoredSession()) } });
     if (!res.ok) throw new Error(`Server returned ${res.status}`);
     return (await res.json()) as T;
   } catch (err) {

@@ -9,11 +9,14 @@ import {
 interface ProjectDetailProps {
   project: Project;
   onToggleChecklist: (projectId: string, itemId: string) => void;
+  onAssignTask: (projectId: string, itemId: string, engineer: string) => void;
   onSaveNotes: (projectId: string, text: string) => void;
   onToggleArchive: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onOpenEdit: (project: Project) => void;
   onToast: (msg: string) => void;
+  engineers: string[];
+  readOnly: boolean;
 }
 
 // ─── Inline SVG icon components ──────────────────────────────────────────────
@@ -111,11 +114,14 @@ const STAGES = ['Kickoff', 'Pre-Work', 'On-Site', 'Reporting', 'Completed'] as c
 export default function ProjectDetail({
   project,
   onToggleChecklist,
+  onAssignTask,
   onSaveNotes,
   onToggleArchive,
   onDeleteProject,
   onOpenEdit,
   onToast,
+  engineers,
+  readOnly,
 }: ProjectDetailProps) {
   const [notesText, setNotesText] = useState(project.notes);
   const notesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -329,17 +335,19 @@ export default function ProjectDetail({
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-charcoal-950/60 max-h-[420px]">
-              {project.checklist.map((item, idx) => (
+              {project.checklist.map((item, idx) => {
+                const isDeviation = !!item.assignedTo && item.assignedTo !== project.assignedEngineer && item.assignedTo !== project.pm.name;
+                return (
                 <div
                   key={item.id}
-                  onClick={() => onToggleChecklist(project.id, item.id)}
-                  className={`flex items-start space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                  className={`flex items-start space-x-3 p-2 rounded-lg transition-colors ${
                     item.completed
-                      ? 'bg-indigo-950/10 hover:bg-indigo-950/20 text-charcoal-500'
-                      : 'bg-charcoal-900/30 hover:bg-charcoal-800/40 text-charcoal-200'
-                  }`}
+                      ? 'bg-indigo-950/10 text-charcoal-500'
+                      : 'bg-charcoal-900/30 text-charcoal-200'
+                  } ${readOnly ? '' : 'cursor-pointer hover:bg-charcoal-800/40'}`}
+                  onClick={() => { if (!readOnly) onToggleChecklist(project.id, item.id); }}
                 >
-                  <button className="mt-0.5 shrink-0 transition-colors">
+                  <button className="mt-0.5 shrink-0 transition-colors" disabled={readOnly}>
                     {item.completed ? (
                       <SvgCheckCircle2 className="text-sunset-500 fill-sunset-500/10" />
                     ) : (
@@ -350,12 +358,34 @@ export default function ProjectDetail({
                     <span className={`font-medium ${item.completed ? 'line-through text-charcoal-500' : ''}`}>
                       {item.task}
                     </span>
+                    {isDeviation && (
+                      <span className="ml-2 inline-flex items-center gap-1 align-middle text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-300 border border-amber-700/50" title={`Deviation: ${item.assignedTo} covering for ${project.assignedEngineer || 'project engineer'}`}>
+                        ⚠ {item.assignedTo}
+                      </span>
+                    )}
+                    {!readOnly && (
+                      <select
+                        value={item.assignedTo || ''}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => onAssignTask(project.id, item.id, e.target.value)}
+                        className="ml-2 align-middle bg-charcoal-950 border border-charcoal-700 rounded px-1.5 py-0.5 text-[10px] text-charcoal-300 focus:outline-none focus:border-sunset-500"
+                        title="Assign engineer for this task"
+                      >
+                        <option value="">Project engineer</option>
+                        {engineers.map(name => (
+                          <option key={name} value={name} disabled={name === project.assignedEngineer}>
+                            {name === project.assignedEngineer ? `${name} (project engineer)` : name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   <span className="text-[9px] font-mono text-charcoal-600 shrink-0 select-none">
                     Step {idx + 1}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

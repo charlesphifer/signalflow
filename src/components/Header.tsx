@@ -1,4 +1,4 @@
-import type { ActiveTab } from '../types';
+import type { ActiveTab, AuthUser } from '../types';
 
 type SaveStatus = 'saved' | 'saving' | 'error' | 'idle';
 
@@ -9,18 +9,21 @@ interface HeaderProps {
   onSaveNow: () => void;
   onNewProject: () => void;
   pendingDraftCount: number;
+  user: AuthUser;
+  onLogout: () => void;
 }
 
-const tabs: { id: ActiveTab; label: string; shortLabel: string }[] = [
+const tabs: { id: ActiveTab; label: string; shortLabel: string; adminOnly?: boolean }[] = [
   { id: 'projects', label: 'Deployment Dashboard', shortLabel: 'Dashboard' },
   { id: 'intake', label: 'NK Order Intake', shortLabel: 'Intake' },
   { id: 'people', label: 'People Roster', shortLabel: 'People' },
   { id: 'calendar', label: 'Interactive Calendar', shortLabel: 'Calendar' },
   { id: 'email-vault', label: 'Email Boilerplate Vault', shortLabel: 'Email Vault' },
   { id: 'docs-search', label: 'Technical Reference Vault', shortLabel: 'Tech Ref' },
+  { id: 'user-admin', label: 'User Admin', shortLabel: 'Admin', adminOnly: true },
 ];
 
-export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, onNewProject, pendingDraftCount }: HeaderProps) {
+export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, onNewProject, pendingDraftCount, user, onLogout }: HeaderProps) {
   const statusConfig = {
     saved:   { label: 'Saved',       color: 'text-emerald-400', dot: 'bg-emerald-400' },
     saving:  { label: 'Saving...',   color: 'text-amber-400',   dot: 'bg-amber-400 animate-pulse' },
@@ -66,7 +69,7 @@ export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, 
       {/* Navigation tabs */}
       <div style={{ msOverflowStyle: 'none', scrollbarWidth: 'none' }} className="flex items-center space-x-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0 -mx-4 px-4 lg:mx-0 lg:px-0 whitespace-nowrap">
         <style>{`.scrollbar-none::-webkit-scrollbar { display: none !important; }`}</style>
-        {tabs.map(tab => (
+        {tabs.filter(tab => !tab.adminOnly || user.roles.includes('admin')).map(tab => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
@@ -99,6 +102,15 @@ export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, 
           </svg>
           <span>NEW PROJECT</span>
         </button>
+        <div className="flex items-center space-x-2 pl-2 border-l border-charcoal-800">
+          <div className="text-right">
+            <p className="text-xs font-bold text-charcoal-200 leading-tight">{user.displayName}</p>
+            <p className="text-[10px] text-charcoal-500 leading-tight">{user.roles.join(' · ')}</p>
+          </div>
+          <button onClick={onLogout} className="text-xs font-bold px-3 py-2 rounded-lg border border-charcoal-700 text-charcoal-400 hover:text-rose-400 hover:border-rose-700 transition-all duration-200">
+            Sign Out
+          </button>
+        </div>
       </div>
     </header>
   );

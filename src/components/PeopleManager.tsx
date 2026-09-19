@@ -31,7 +31,7 @@ export default function PeopleManager({ people, onSave, onToast }: PeopleManager
     setDirty(true);
   };
 
-  const toggleRole = (id: string, role: 'AM' | 'PM') => {
+  const toggleRole = (id: string, role: 'AM' | 'PM' | 'Engineer') => {
     setDraft(prev =>
       prev.map(p =>
         p.id === id
@@ -106,7 +106,7 @@ export default function PeopleManager({ people, onSave, onToast }: PeopleManager
                 <div className="md:col-span-2 text-[10px] font-bold text-charcoal-500 uppercase tracking-wide flex flex-col gap-1">
                   Roles
                   <div className="flex gap-1.5">
-                    {(['AM', 'PM'] as const).map(role => (
+                    {(['AM', 'PM', 'Engineer'] as const).map(role => (
                       <button
                         key={role}
                         onClick={() => toggleRole(person.id, role)}

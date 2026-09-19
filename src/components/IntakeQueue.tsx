@@ -16,6 +16,7 @@ export interface DraftOverrides {
   projectNumber: string;
   pmName: string;
   amName: string;
+  engineerName?: string;
 }
 
 function parseAddress(addr: string): { city: string; state: string; siteAddress: string } {
@@ -106,6 +107,7 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
   );
   const [pmName, setPmName] = useState('');
   const [amName, setAmName] = useState(draft.opportunityOwner || '');
+  const [engineerName, setEngineerName] = useState('');
 
   const ams = people.filter(p => p.roles.includes('AM'));
   const pms = people.filter(p => p.roles.includes('PM'));
@@ -257,6 +259,21 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
               </datalist>
             </label>
           </div>
+          <div className="border-t border-charcoal-800 pt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label className="text-xs text-charcoal-400 flex flex-col gap-1">
+              Assigned engineer
+              <input
+                list="intake-engineers"
+                value={engineerName}
+                onChange={e => setEngineerName(e.target.value)}
+                placeholder="Select or type…"
+                className="bg-charcoal-950 border border-charcoal-700 rounded-lg px-3 py-2 text-charcoal-100 text-xs focus:outline-none focus:border-sunset-500"
+              />
+              <datalist id="intake-engineers">
+                {people.filter(p => p.roles.includes('Engineer')).map(p => <option key={p.id} value={p.name} />)}
+              </datalist>
+            </label>
+          </div>
 
           <div className="flex items-center justify-end gap-2">
             <button
@@ -271,7 +288,7 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
                   onToast('Select a project type first');
                   return;
                 }
-                onConfirm(draft, { projectType: type, projectNumber, pmName, amName });
+                onConfirm(draft, { projectType: type, projectNumber, pmName, amName, engineerName });
               }}
               className="text-xs font-black px-4 py-2 rounded-lg bg-sunset-500 hover:bg-sunset-600 text-charcoal-950 transition-all"
             >
@@ -339,6 +356,7 @@ export function draftToProject(draft: PendingDraft, overrides: DraftOverrides): 
     goLiveDate: draft.requestedDate || '',
     pm: { name: overrides.pmName || draft.opportunityOwner || 'TBD' },
     ae: { name: overrides.amName || draft.opportunityOwner || 'TBD' },
+    assignedEngineer: overrides.engineerName || 'TBD',
     itContact: { name: 'TBD', email: 'TBD', phone: 'TBD' },
     soNumber: draft.salesOrderNumbers.join(', '),
     customerPo: draft.customerPo,
