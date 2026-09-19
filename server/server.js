@@ -1,6 +1,7 @@
 import express from 'express';
 import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { randomBytes } from 'crypto';
 import { hashPassword, verifyPassword, signToken, verifyToken } from './auth.js';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
@@ -38,7 +39,7 @@ function seedUsers() {
   let users = readJson(USERS_FILE, null);
   if (users && users.length > 0) return;
   users = [
-    { id: 'u-admin', username: 'charles', password: hashPassword('ChangeMe-Demo2026!'), roles: ['admin', 'engineer'], displayName: 'Charles Phifer' },
+    { id: 'u-admin', username: 'charles', password: hashPassword('ChangeMe-Demo2026!'), roles: ['admin', 'engineer'], displayName: 'Charles Phifer', email: 'cphifer3@gmail.com' },
     { id: 'u-eng1', username: 'demo-engineer', password: hashPassword('engineer123'), roles: ['engineer'], displayName: 'Demo Engineer' },
     { id: 'u-view1', username: 'demo-viewer', password: hashPassword('viewer123'), roles: ['viewer'], displayName: 'Demo Viewer' },
   ];
@@ -69,6 +70,37 @@ function recordFailedLogin(username, ip, reason) {
     log.unshift({ at: new Date().toISOString(), username, ip, reason });
     writeJsonAtomic(FAILED_LOG, log.slice(0, 500));
   } catch (err) { console.error('Failed login log error:', err.message); }
+}
+
+// Send email via AgentMail REST (no SDK dependency)
+const AGENTMAIL_KEY = process.env.AGENTMAIL_API_KEY || '';
+const AGENTMAIL_INBOX = process.env.AGENTMAIL_INBOX || 'jarvis0772@agentmail.to';
+const APP_BASE_URL = process.env.APP_BASE_URL || '';
+
+async function sendResetEmail(to, displayName, resetToken, username) {
+  if (!AGENTMAIL_KEY) return false;
+  const link = `${APP_BASE_URL.replace(/\/$/, '')}/signalflow/?reset=${encodeURIComponent(resetToken)}&user=${encodeURIComponent(username)}`;
+  const body = [
+    `Hi ${displayName || 'there'},`,
+    ``,
+    `A password reset was requested for your SignalFlow account.`,
+    `Open the link below within 15 minutes to set a new password:`,
+    ``,
+    link,
+    ``,
+    `If you did not request this, you can ignore this email — the link expires on its own.`,
+    ``,
+    `— SignalFlow`,
+  ].join('\n');
+  try {
+    const res = await fetch(`https://api.agentmail.to/v0/inboxes/${encodeURIComponent(AGENTMAIL_INBOX)}/messages/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AGENTMAIL_KEY}` },
+      body: JSON.stringify({ to: [to], subject: 'SignalFlow — Password Reset', text: body }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return res.ok;
+  } catch { return false; }
 }
 
 function notifyHomeAssistant(text) {
@@ -149,7 +181,7 @@ app.get('/api/users', isAdmin, (req, res) => {
 });
 
 app.post('/api/users', isAdmin, (req, res) => {
-  const { username, password, roles, displayName } = req.body || {};
+  const { username, password, roles, displayName, email } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   const users = readJson(USERS_FILE, []);
   if (users.some((u) => u.username.toLowerCase() === String(username).toLowerCase())) {
@@ -162,6 +194,7 @@ app.post('/api/users', isAdmin, (req, res) => {
     password: hashPassword(String(password)),
     roles: cleanRoles,
     displayName: displayName || username,
+    email: email || '',
   };
   users.push(user);
   writeJsonAtomic(USERS_FILE, users);
@@ -173,10 +206,11 @@ app.put('/api/users/:id', isAdmin, (req, res) => {
   const users = readJson(USERS_FILE, []);
   const idx = users.findIndex((u) => u.id === req.params.id);
   if (idx < 0) return res.status(404).json({ error: 'User not found' });
-  const { password, roles, displayName } = req.body || {};
+  const { password, roles, displayName, email } = req.body || {};
   if (password) users[idx].password = hashPassword(String(password));
   if (Array.isArray(roles)) users[idx].roles = roles.filter((r) => ['admin', 'engineer', 'viewer'].includes(r));
   if (displayName !== undefined) users[idx].displayName = displayName;
+  if (email !== undefined) users[idx].email = String(email).trim();
   writeJsonAtomic(USERS_FILE, users);
   const { password: _p, ...safe } = users[idx];
   res.json({ ok: true, user: safe });
@@ -195,7 +229,7 @@ app.delete('/api/users/:id', isAdmin, (req, res) => {
 // PUT  /api/auth/reset { username, code, newPassword } -> consumes code, sets password
 const RESETS_FILE = join(DATA_DIR, 'password_resets.json');
 
-app.post('/api/auth/forgot', (req, res) => {
+app.post('/api/auth/forgot', async (req, res) => {
   const { username } = req.body || {};
   if (!username) return res.status(400).json({ error: 'Username required' });
   const users = readJson(USERS_FILE, []);
@@ -205,40 +239,51 @@ app.post('/api/auth/forgot', (req, res) => {
     recordFailedLogin(String(username), req.socket?.remoteAddress || 'unknown', 'forgot-password: unknown user');
     return res.json({ ok: true });
   }
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const resetToken = randomBytes(24).toString('base64url');
   const resets = readJson(RESETS_FILE, []);
-  const now = Date.now();
-  // Invalidate previous codes for this user
+  // Invalidate previous tokens for this user
   const next = resets.filter((r) => r.username !== user.username);
-  next.push({ username: user.username, codeHash: hashPassword(code), expiresAt: now + 15 * 60 * 1000, used: false, requestedAt: new Date().toISOString() });
+  next.push({ username: user.username, tokenHash: hashPassword(resetToken), expiresAt: Date.now() + 15 * 60 * 1000, used: false, requestedAt: new Date().toISOString() });
   writeJsonAtomic(RESETS_FILE, next);
   recordLogin(user.username, req.socket?.remoteAddress || 'unknown', true); // audit as event
   const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  notifyHomeAssistant(`PASSWORD RESET requested by ${user.displayName || user.username} at ${when}. Code: ${code} (valid 15 min)`).then(() => {
-    res.json({ ok: true, message: 'If the account exists, a reset code was sent to the administrator.' });
-  });
+
+  if (user.email) {
+    const sent = await sendResetEmail(user.email, user.displayName, resetToken, user.username);
+    if (sent) {
+      return res.json({ ok: true, message: 'A password reset link has been emailed to the address on file. It expires in 15 minutes.' });
+    }
+    // Email failed — fall through to admin notification with code
+  }
+  // No email on file (or send failed): 6-digit code via HA app notification
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  next.pop();
+  next.push({ username: user.username, tokenHash: hashPassword(code), expiresAt: Date.now() + 15 * 60 * 1000, used: false, requestedAt: new Date().toISOString(), codeFallback: true });
+  writeJsonAtomic(RESETS_FILE, next);
+  await notifyHomeAssistant(`PASSWORD RESET requested by ${user.displayName || user.username} at ${when}. No email on file — relay this code: ${code} (valid 15 min)`);
+  res.json({ ok: true, message: 'A reset code was sent to the administrator. Ask them for the code, then set your new password.' });
 });
 
 app.put('/api/auth/reset', (req, res) => {
   const { username, code, newPassword } = req.body || {};
-  if (!username || !code || !newPassword) return res.status(400).json({ error: 'Username, code and new password required' });
+  if (!username || !code || !newPassword) return res.status(400).json({ error: 'Reset token and new password required' });
   if (String(newPassword).length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
   const resets = readJson(RESETS_FILE, []);
   const entry = resets.find((r) => r.username.toLowerCase() === String(username).toLowerCase());
   const users = readJson(USERS_FILE, []);
   const user = users.find((u) => u.username.toLowerCase() === String(username).toLowerCase());
   if (!user || !entry || entry.used) {
-    recordFailedLogin(String(username), req.socket?.remoteAddress || 'unknown', 'password reset: no valid code');
-    return res.status(400).json({ error: 'Invalid or expired reset code' });
+    recordFailedLogin(String(username), req.socket?.remoteAddress || 'unknown', 'password reset: no valid token');
+    return res.status(400).json({ error: 'Invalid or expired reset link' });
   }
   if (Date.now() > entry.expiresAt) {
     entry.used = true;
     writeJsonAtomic(RESETS_FILE, resets);
-    return res.status(400).json({ error: 'Reset code expired — request a new one' });
+    return res.status(400).json({ error: 'Reset link expired — request a new one' });
   }
-  if (!verifyPassword(String(code), entry.codeHash)) {
-    recordFailedLogin(user.username, req.socket?.remoteAddress || 'unknown', 'password reset: wrong code');
-    return res.status(400).json({ error: 'Invalid reset code' });
+  if (!verifyPassword(String(code), entry.tokenHash)) {
+    recordFailedLogin(user.username, req.socket?.remoteAddress || 'unknown', 'password reset: wrong token');
+    return res.status(400).json({ error: 'Invalid reset link' });
   }
   entry.used = true;
   user.password = hashPassword(String(newPassword));

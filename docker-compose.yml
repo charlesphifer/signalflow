@@ -22,6 +22,9 @@ services:
       - HASS_URL=${HASS_URL}
       - HASS_TOKEN=${HASS_TOKEN}
       - HASS_NOTIFY_SERVICE=notify
+      - AGENTMAIL_API_KEY=${AGENTMAIL_API_KEY}
+      - AGENTMAIL_INBOX=jarvis0772@agentmail.to
+      - APP_BASE_URL=${APP_BASE_URL:-https://aihubvoice.space}
 
 volumes:
   signalflow_data:

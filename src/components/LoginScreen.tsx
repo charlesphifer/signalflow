@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { login } from '../hooks/useAuth';
 
+// Deep-link support: /signalflow/?reset=<token>&user=<username>
+const urlParams = new URLSearchParams(window.location.search);
+const INITIAL_TOKEN = urlParams.get('reset') || '';
+const INITIAL_USER = urlParams.get('user') || '';
+
 const API = '/api';
 
 interface LoginScreenProps {
@@ -15,10 +20,11 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [busy, setBusy] = useState(false);
 
   // Forgot-password states
-  const [mode, setMode] = useState<'login' | 'forgot' | 'reset'>('login');
-  const [resetCode, setResetCode] = useState('');
+  const [mode, setMode] = useState<'login' | 'forgot' | 'reset'>(INITIAL_TOKEN ? 'reset' : 'login');
+  const [resetCode, setResetCode] = useState(INITIAL_TOKEN);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetSentMessage, setResetSentMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,8 +43,12 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Request failed');
-        setInfo(data.message || 'Reset code sent to the administrator.');
-        setMode('reset');
+        setInfo(data.message || 'If the account exists, a reset link or code has been sent.');
+        if (INITIAL_USER) setUsername(INITIAL_USER);
+        // Stay on forgot screen with the info message; if email was sent, user switches to their inbox.
+        // If code fallback was used, show the reset form too.
+        setMode(data.message?.includes('code') ? 'reset' : 'forgot');
+        setResetSentMessage(data.message);
       } else {
         if (newPassword !== confirmPassword) throw new Error('Passwords do not match');
         const res = await fetch(`${API}/auth/reset`, {
@@ -51,6 +61,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         setInfo('Password reset! Sign in with your new password.');
         setMode('login');
         setPassword('');
+        window.history.replaceState({}, '', window.location.pathname);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -80,12 +91,11 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           <label className="flex flex-col gap-1.5 text-xs font-bold text-charcoal-400 uppercase tracking-wide">
             Username
             <input
-              autoFocus
+              autoFocus={mode !== 'reset'}
               value={username}
               onChange={e => setUsername(e.target.value)}
               autoComplete="username"
-              disabled={mode === 'reset'}
-              className="bg-charcoal-950 border border-charcoal-700 rounded-lg px-3 py-2.5 text-charcoal-100 text-sm focus:outline-none focus:border-sunset-500 disabled:opacity-50"
+              className="bg-charcoal-950 border border-charcoal-700 rounded-lg px-3 py-2.5 text-charcoal-100 text-sm focus:outline-none focus:border-sunset-500"
             />
           </label>
 
@@ -104,8 +114,11 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
           {mode === 'reset' && (
             <>
+              {resetSentMessage && (
+                <p className="text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 rounded-lg px-3 py-2">{resetSentMessage}</p>
+              )}
               <label className="flex flex-col gap-1.5 text-xs font-bold text-charcoal-400 uppercase tracking-wide">
-                Reset code (from administrator)
+                Reset code (from email or administrator)
                 <input
                   autoFocus
                   value={resetCode}

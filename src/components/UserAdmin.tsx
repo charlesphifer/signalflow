@@ -13,6 +13,7 @@ interface ManagedUser {
   username: string;
   roles: UserRole[];
   displayName: string;
+  email?: string;
 }
 
 const ROLES: UserRole[] = ['admin', 'engineer', 'viewer'];
@@ -20,7 +21,7 @@ const ROLES: UserRole[] = ['admin', 'engineer', 'viewer'];
 export default function UserAdmin({ currentUser, onToast }: UserAdminProps) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [newUser, setNewUser] = useState({ username: '', password: '', displayName: '', roles: ['engineer'] as UserRole[] });
+  const [newUser, setNewUser] = useState({ username: '', password: '', displayName: '', email: '', roles: ['engineer'] as UserRole[] });
   const [pwTarget, setPwTarget] = useState<ManagedUser | null>(null);
   const [newPw, setNewPw] = useState('');
 
@@ -33,7 +34,7 @@ export default function UserAdmin({ currentUser, onToast }: UserAdminProps) {
     if (!newUser.username || !newUser.password) { onToast('Username and password required'); return; }
     try {
       await apiFetch('/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) });
-      setNewUser({ username: '', password: '', displayName: '', roles: ['engineer'] });
+      setNewUser({ username: '', password: '', displayName: '', email: '', roles: ['engineer'] });
       onToast('User created');
       load();
     } catch (e) {
@@ -76,7 +77,7 @@ export default function UserAdmin({ currentUser, onToast }: UserAdminProps) {
       </div>
 
       {/* Create user */}
-      <div className="bg-charcoal-900 border border-charcoal-800 rounded-xl p-4 grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
+      <div className="bg-charcoal-900 border border-charcoal-800 rounded-xl p-4 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
         <label className="text-[10px] font-bold text-charcoal-500 uppercase flex flex-col gap-1 md:col-span-1">Username
           <input value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })}
             className="bg-charcoal-950 border border-charcoal-700 rounded-lg px-3 py-2 text-charcoal-100 text-xs focus:outline-none focus:border-sunset-500" />
@@ -89,7 +90,11 @@ export default function UserAdmin({ currentUser, onToast }: UserAdminProps) {
           <input value={newUser.displayName} onChange={e => setNewUser({ ...newUser, displayName: e.target.value })}
             className="bg-charcoal-950 border border-charcoal-700 rounded-lg px-3 py-2 text-charcoal-100 text-xs focus:outline-none focus:border-sunset-500" />
         </label>
-        <div className="text-[10px] font-bold text-charcoal-500 uppercase flex flex-col gap-1 md:col-span-1">Roles
+        <label className="text-[10px] font-bold text-charcoal-500 uppercase flex flex-col gap-1 md:col-span-1">Email (for self-reset)
+          <input type="email" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+            className="bg-charcoal-950 border border-charcoal-700 rounded-lg px-3 py-2 text-charcoal-100 text-xs focus:outline-none focus:border-sunset-500" />
+        </label>
+        <div className="text-[10px] font-bold text-charcoal-500 uppercase flex flex-col gap-1 md:col-span-2">Roles
           <div className="flex gap-1">
             {ROLES.map(r => (
               <button key={r} onClick={() => setNewUser(u => ({
@@ -111,9 +116,10 @@ export default function UserAdmin({ currentUser, onToast }: UserAdminProps) {
       <div className="flex-1 overflow-y-auto flex flex-col gap-2">
         {users.map(user => (
           <div key={user.id} className="bg-charcoal-900 border border-charcoal-800 rounded-xl p-3 flex flex-wrap items-center gap-3">
-            <div className="min-w-[180px]">
+            <div className="min-w-[220px]">
               <p className="text-sm font-bold text-white">{user.displayName}</p>
               <p className="text-xs text-charcoal-500 font-mono">{user.username}</p>
+              <EmailCell user={user} onSaved={load} onToast={onToast} />
             </div>
             <div className="flex gap-1.5">
               {ROLES.map(r => (
@@ -152,5 +158,35 @@ export default function UserAdmin({ currentUser, onToast }: UserAdminProps) {
         </div>
       )}
     </div>
+  );
+}
+
+function EmailCell({ user, onSaved, onToast }: { user: ManagedUser; onSaved: () => void; onToast: (m: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(user.email || '');
+
+  const save = async () => {
+    try {
+      await apiFetch(`/users/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: value }) });
+      onToast('Email saved');
+      setEditing(false);
+      onSaved();
+    } catch { onToast('Save failed'); }
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1 mt-0.5">
+        <input type="email" autoFocus value={value} onChange={e => setValue(e.target.value)}
+          className="bg-charcoal-950 border border-charcoal-700 rounded px-2 py-0.5 text-[11px] text-charcoal-100 focus:outline-none focus:border-sunset-500 w-44" />
+        <button onClick={save} className="text-[10px] font-black px-1.5 py-0.5 rounded bg-sunset-500 text-charcoal-950">✓</button>
+        <button onClick={() => setEditing(false)} className="text-[10px] text-charcoal-500">✕</button>
+      </div>
+    );
+  }
+  return (
+    <button onClick={() => setEditing(true)} className="text-[10px] text-charcoal-500 hover:text-sunset-500 text-left" title="Set email for self-service password reset">
+      {user.email ? `📧 ${user.email}` : '📧 + add email'}
+    </button>
   );
 }
