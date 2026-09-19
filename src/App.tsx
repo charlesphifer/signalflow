@@ -9,6 +9,7 @@ import { getStoredSession, logout as authLogout, canEdit } from './hooks/useAuth
 import type { AuthSession } from './types';
 import IntakeQueue, { draftToProject } from './components/IntakeQueue';
 import PeopleManager from './components/PeopleManager';
+import ChangePassword from './components/ChangePassword';
 import UserAdmin from './components/UserAdmin';
 import LoginScreen from './components/LoginScreen';
 
@@ -443,11 +444,14 @@ export default function App() {
 
         {/* TAB: People Roster */}
         {activeTab === 'people' && (
-          <PeopleManager
-            people={people}
-            onSave={handleSavePeople}
-            onToast={showToast}
-          />
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+            <PeopleManager
+              people={people}
+              onSave={handleSavePeople}
+              onToast={showToast}
+            />
+            {user && <ChangePassword user={user} onToast={showToast} />}
+          </div>
         )}
 
         {/* TAB: User Admin (admin only) */}

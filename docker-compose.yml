@@ -19,6 +19,9 @@ services:
       - DATA_DIR=/data
       - JWT_SECRET=${SIGNALFLOW_JWT_SECRET:-change-me-in-env-file}
       - PARSER_TOKEN=${SIGNALFLOW_PARSER_TOKEN:-change-me-parser-token}
+      - HASS_URL=${HASS_URL}
+      - HASS_TOKEN=${HASS_TOKEN}
+      - HASS_NOTIFY_SERVICE=notify
 
 volumes:
   signalflow_data:

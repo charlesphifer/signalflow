@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AuthUser, UserRole } from '../types';
 import { apiFetch } from '../hooks/useAuth';
+import ChangePassword from './ChangePassword';
 
 interface UserAdminProps {
   currentUser: AuthUser;
@@ -103,6 +104,8 @@ export default function UserAdmin({ currentUser, onToast }: UserAdminProps) {
         </div>
         <button onClick={createUser} className="bg-sunset-500 hover:bg-sunset-600 text-charcoal-950 text-xs font-black py-2.5 rounded-lg md:col-span-1">+ Create User</button>
       </div>
+
+      <ChangePassword user={currentUser} onToast={onToast} />
 
       {/* User list */}
       <div className="flex-1 overflow-y-auto flex flex-col gap-2">

@@ -2,6 +2,9 @@ import express from 'express';
 import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { hashPassword, verifyPassword, signToken, verifyToken } from './auth.js';
+import { request as httpRequest } from 'http';
+import { request as httpsRequest } from 'https';
+import { URL } from 'url';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -44,16 +47,73 @@ function seedUsers() {
 }
 seedUsers();
 
+// ── Login audit + notification ──
+const LOGIN_LOG = join(DATA_DIR, 'logins.json');
+const FAILED_LOG = join(DATA_DIR, 'failed_logins.json');
+const HASS_URL = process.env.HASS_URL || '';
+const HASS_TOKEN = process.env.HASS_TOKEN || '';
+const NOTIFY_SERVICE = process.env.HASS_NOTIFY_SERVICE || 'notify'; // app notification only
+const SILENT_USERNAMES = (process.env.LOGIN_SILENT_USERS || 'charles').split(',').map(s => s.trim().toLowerCase());
+
+function recordLogin(username, ip, notified) {
+  try {
+    const log = readJson(LOGIN_LOG, []);
+    log.unshift({ at: new Date().toISOString(), username, ip, notified });
+    writeJsonAtomic(LOGIN_LOG, log.slice(0, 500));
+  } catch (err) { console.error('Login log error:', err.message); }
+}
+
+function recordFailedLogin(username, ip, reason) {
+  try {
+    const log = readJson(FAILED_LOG, []);
+    log.unshift({ at: new Date().toISOString(), username, ip, reason });
+    writeJsonAtomic(FAILED_LOG, log.slice(0, 500));
+  } catch (err) { console.error('Failed login log error:', err.message); }
+}
+
+function notifyHomeAssistant(text) {
+  if (!HASS_URL || !HASS_TOKEN) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    try {
+      const url = new URL(`${HASS_URL.replace(/\/$/, '')}/api/services/${NOTIFY_SERVICE}/send_message`);
+      const mod = url.protocol === 'https:' ? httpsRequest : httpRequest;
+      const req = mod(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${HASS_TOKEN}`,
+        },
+        timeout: 5000,
+      }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode === 200 || res.statusCode === 201)); });
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => { req.destroy(); resolve(false); });
+      req.end(JSON.stringify({ title: 'SignalFlow Login', message: text }));
+    } catch { resolve(false); }
+  });
+}
+
 // ---- Auth ----
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
   const users = readJson(USERS_FILE, []);
   const user = users.find((u) => u.username.toLowerCase() === String(username).toLowerCase());
-  if (!user || !verifyPassword(password, user.password)) {
+  const ip = (req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').toString().split(',')[0].trim();
+  if (!user) {
+    recordFailedLogin(String(username), ip, 'unknown user');
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+  if (!verifyPassword(password, user.password)) {
+    recordFailedLogin(user.username, ip, 'wrong password');
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   const token = signToken({ sub: user.id, username: user.username, roles: user.roles, displayName: user.displayName });
+  const silent = SILENT_USERNAMES.includes(String(username).toLowerCase());
+  recordLogin(user.username, ip, !silent);
+  if (!silent) {
+    const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    notifyHomeAssistant(`${user.displayName || user.username} signed in at ${when} (IP ${ip})`);
+  }
   res.json({ token, user: { id: user.id, username: user.username, roles: user.roles, displayName: user.displayName } });
 });
 
@@ -67,7 +127,7 @@ function requireAuth(req, res, next) {
   next();
 }
 app.use('/api', (req, res, next) => {
-  if (req.path === '/auth/login' || req.path === '/health') return next();
+  if (req.path === '/auth/login' || req.path === '/health' || req.path === '/auth/forgot' || req.path === '/auth/reset') return next();
   return requireAuth(req, res, next);
 });
 
@@ -128,6 +188,65 @@ app.delete('/api/users/:id', isAdmin, (req, res) => {
   const next = users.filter((u) => u.id !== req.params.id);
   writeJsonAtomic(USERS_FILE, next);
   res.json({ ok: true, removed: users.length - next.length });
+});
+
+// ---- Forgot password flow ----
+// POST /api/auth/forgot { username } -> generates one-time code (15 min), notifies admin via HA
+// PUT  /api/auth/reset { username, code, newPassword } -> consumes code, sets password
+const RESETS_FILE = join(DATA_DIR, 'password_resets.json');
+
+app.post('/api/auth/forgot', (req, res) => {
+  const { username } = req.body || {};
+  if (!username) return res.status(400).json({ error: 'Username required' });
+  const users = readJson(USERS_FILE, []);
+  const user = users.find((u) => u.username.toLowerCase() === String(username).toLowerCase());
+  // Always answer ok (no user enumeration), but only actually create a code for real users
+  if (!user) {
+    recordFailedLogin(String(username), req.socket?.remoteAddress || 'unknown', 'forgot-password: unknown user');
+    return res.json({ ok: true });
+  }
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const resets = readJson(RESETS_FILE, []);
+  const now = Date.now();
+  // Invalidate previous codes for this user
+  const next = resets.filter((r) => r.username !== user.username);
+  next.push({ username: user.username, codeHash: hashPassword(code), expiresAt: now + 15 * 60 * 1000, used: false, requestedAt: new Date().toISOString() });
+  writeJsonAtomic(RESETS_FILE, next);
+  recordLogin(user.username, req.socket?.remoteAddress || 'unknown', true); // audit as event
+  const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  notifyHomeAssistant(`PASSWORD RESET requested by ${user.displayName || user.username} at ${when}. Code: ${code} (valid 15 min)`).then(() => {
+    res.json({ ok: true, message: 'If the account exists, a reset code was sent to the administrator.' });
+  });
+});
+
+app.put('/api/auth/reset', (req, res) => {
+  const { username, code, newPassword } = req.body || {};
+  if (!username || !code || !newPassword) return res.status(400).json({ error: 'Username, code and new password required' });
+  if (String(newPassword).length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  const resets = readJson(RESETS_FILE, []);
+  const entry = resets.find((r) => r.username.toLowerCase() === String(username).toLowerCase());
+  const users = readJson(USERS_FILE, []);
+  const user = users.find((u) => u.username.toLowerCase() === String(username).toLowerCase());
+  if (!user || !entry || entry.used) {
+    recordFailedLogin(String(username), req.socket?.remoteAddress || 'unknown', 'password reset: no valid code');
+    return res.status(400).json({ error: 'Invalid or expired reset code' });
+  }
+  if (Date.now() > entry.expiresAt) {
+    entry.used = true;
+    writeJsonAtomic(RESETS_FILE, resets);
+    return res.status(400).json({ error: 'Reset code expired — request a new one' });
+  }
+  if (!verifyPassword(String(code), entry.codeHash)) {
+    recordFailedLogin(user.username, req.socket?.remoteAddress || 'unknown', 'password reset: wrong code');
+    return res.status(400).json({ error: 'Invalid reset code' });
+  }
+  entry.used = true;
+  user.password = hashPassword(String(newPassword));
+  writeJsonAtomic(RESETS_FILE, resets);
+  writeJsonAtomic(USERS_FILE, users);
+  recordLogin(user.username, req.socket?.remoteAddress || 'unknown', true); // audit as event
+  notifyHomeAssistant(`PASSWORD RESET COMPLETED for ${user.displayName || user.username}`);
+  res.json({ ok: true });
 });
 
 // Change own password (any authenticated user)
