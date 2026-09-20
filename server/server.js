@@ -107,7 +107,7 @@ function notifyHomeAssistant(text) {
   if (!HASS_URL || !HASS_TOKEN) return Promise.resolve(false);
   return new Promise((resolve) => {
     try {
-      const url = new URL(`${HASS_URL.replace(/\/$/, '')}/api/services/${NOTIFY_SERVICE}/send_message`);
+      const url = new URL(`${HASS_URL.replace(/\/$/, '')}/api/services/${NOTIFY_SERVICE}/notify`);
       const mod = url.protocol === 'https:' ? httpsRequest : httpRequest;
       const req = mod(url, {
         method: 'POST',
@@ -337,7 +337,9 @@ app.put('/api/projects', canEdit, (req, res) => {
     for (const p of added) {
       const who = req.user?.displayName || req.user?.username || 'someone';
       const source = p.source === 'email' ? 'email ingestion' : 'manual creation';
-      notifyHomeAssistant(`New project created via ${source}: ${p.name || 'Unnamed'} — ${p.type || 'untyped'} (${who})`);
+      console.log(`New project detected: ${p.id} (${p.name}) — firing HA notification`);
+      notifyHomeAssistant(`New project created via ${source}: ${p.name || 'Unnamed'} — ${p.type || 'untyped'} (${who})`)
+        .then((ok) => console.log(`HA notify result for ${p.id}: ${ok}`));
     }
     console.log(`Saved ${req.body.length} projects at ${new Date().toISOString()}`);
     res.json({ ok: true, count: req.body.length, savedAt: new Date().toISOString() });
