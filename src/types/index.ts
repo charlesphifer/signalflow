@@ -47,6 +47,7 @@ export interface PendingDraft {
   orderDate: string;
   requestedDate: string;
   orderTotal?: number;
+  squareFootage?: number;
   suggestedType: DraftProjectType;
   qualifyingLineItems: LineItem[];
   lineItems: LineItem[];
@@ -117,6 +118,7 @@ export interface Project {
   salesforceUrl: string;
   source: 'manual' | 'email';
   siteAddress: string;
+  squareFootage?: number;
   lat?: number;
   lon?: number;
   notes: string;

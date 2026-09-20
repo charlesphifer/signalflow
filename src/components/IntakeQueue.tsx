@@ -17,6 +17,7 @@ export interface DraftOverrides {
   pmName: string;
   amName: string;
   engineerName?: string;
+  squareFootage?: number;
 }
 
 function parseAddress(addr: string): { city: string; state: string; siteAddress: string } {
@@ -108,6 +109,7 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
   const [pmName, setPmName] = useState('');
   const [amName, setAmName] = useState(draft.opportunityOwner || '');
   const [engineerName, setEngineerName] = useState('');
+  const [sqft, setSqft] = useState(draft.squareFootage != null ? String(draft.squareFootage) : '');
 
   const ams = people.filter(p => p.roles.includes('AM'));
   const pms = people.filter(p => p.roles.includes('PM'));
@@ -169,6 +171,7 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
             <Field label="Sales rep" value={draft.salesRep} />
             <Field label="Entered by" value={draft.enteredBy} />
             <Field label="Order total" value={draft.orderTotal != null ? `$${draft.orderTotal.toLocaleString()}` : ''} />
+            <Field label="Square footage" value={draft.squareFootage != null ? `${draft.squareFootage.toLocaleString()} sq ft` : ''} />
             <Field label="Bill to" value={draft.billTo} wide />
             <Field label="Ship to" value={draft.shipTo} wide />
           </div>
@@ -261,6 +264,16 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
           </div>
           <div className="border-t border-charcoal-800 pt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="text-xs text-charcoal-400 flex flex-col gap-1">
+              Square footage (sq ft)
+              <input
+                inputMode="numeric"
+                value={sqft}
+                onChange={e => setSqft(e.target.value.replace(/[^0-9.]/g, ''))}
+                placeholder={draft.squareFootage != null ? String(draft.squareFootage) : 'e.g. 10000'}
+                className="bg-charcoal-950 border border-charcoal-700 rounded-lg px-3 py-2 text-charcoal-100 text-xs focus:outline-none focus:border-sunset-500"
+              />
+            </label>
+            <label className="text-xs text-charcoal-400 flex flex-col gap-1">
               Assigned engineer
               <input
                 list="intake-engineers"
@@ -288,7 +301,7 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
                   onToast('Select a project type first');
                   return;
                 }
-                onConfirm(draft, { projectType: type, projectNumber, pmName, amName, engineerName });
+                onConfirm(draft, { projectType: type, projectNumber, pmName, amName, engineerName, squareFootage: sqft ? parseFloat(sqft) : draft.squareFootage });
               }}
               className="text-xs font-black px-4 py-2 rounded-lg bg-sunset-500 hover:bg-sunset-600 text-charcoal-950 transition-all"
             >
@@ -357,6 +370,7 @@ export function draftToProject(draft: PendingDraft, overrides: DraftOverrides): 
     pm: { name: overrides.pmName || draft.opportunityOwner || 'TBD' },
     ae: { name: overrides.amName || draft.opportunityOwner || 'TBD' },
     assignedEngineer: overrides.engineerName || 'TBD',
+    squareFootage: overrides.squareFootage,
     itContact: { name: 'TBD', email: 'TBD', phone: 'TBD' },
     soNumber: draft.salesOrderNumbers.join(', '),
     customerPo: draft.customerPo,

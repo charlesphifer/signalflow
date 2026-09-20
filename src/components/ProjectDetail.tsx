@@ -168,6 +168,11 @@ export default function ProjectDetail({
             <span className="text-[10px] font-bold tracking-wide text-charcoal-300 px-2 py-0.5 bg-charcoal-800 rounded">
               🏥 Credentials: {project.credentials}
             </span>
+            {project.squareFootage != null && (
+              <span className="text-[10px] font-bold tracking-wide text-indigo-300 px-2 py-0.5 bg-indigo-900/40 border border-indigo-800/60 rounded">
+                📐 {project.squareFootage.toLocaleString()} sq ft
+              </span>
+            )}
           </div>
           <h2 className="text-xl font-black text-white tracking-tight">
             {project.name}
