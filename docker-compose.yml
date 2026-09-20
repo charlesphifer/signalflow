@@ -25,6 +25,7 @@ services:
       - AGENTMAIL_API_KEY=${AGENTMAIL_API_KEY}
       - AGENTMAIL_INBOX=jarvis0772@agentmail.to
       - APP_BASE_URL=${APP_BASE_URL:-https://aihubvoice.space}
+      - TZ=America/New_York
 
 volumes:
   signalflow_data:

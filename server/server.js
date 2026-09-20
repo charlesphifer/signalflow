@@ -146,7 +146,7 @@ app.post('/api/auth/login', (req, res) => {
   recordLogin(user.username, ip, !silent);
   audit(req, 'auth.login', user.username, { silent });
   if (!silent) {
-    const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
     notifyHomeAssistant(`${user.displayName || user.username} signed in at ${when} (IP ${ip})`);
   }
   res.json({ token, user: { id: user.id, username: user.username, roles: user.roles, displayName: user.displayName } });
@@ -320,7 +320,7 @@ app.post('/api/auth/forgot', async (req, res) => {
   next.push({ username: user.username, tokenHash: hashPassword(resetToken), expiresAt: Date.now() + 15 * 60 * 1000, used: false, requestedAt: new Date().toISOString() });
   writeJsonAtomic(RESETS_FILE, next);
   recordLogin(user.username, req.socket?.remoteAddress || 'unknown', true); // audit as event
-  const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
 
   if (user.email) {
     const sent = await sendResetEmail(user.email, user.displayName, resetToken, user.username);
