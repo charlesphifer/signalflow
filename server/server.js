@@ -160,6 +160,10 @@ function requireAuth(req, res, next) {
 }
 app.use('/api', (req, res, next) => {
   if (req.path === '/auth/login' || req.path === '/health' || req.path === '/auth/forgot' || req.path === '/auth/reset') return next();
+  // Parser token passthrough — POST /api/drafts with the shared parser secret skips JWT auth
+  const header0 = req.headers.authorization || '';
+  const parserToken = process.env.PARSER_TOKEN;
+  if (req.path === '/drafts' && req.method === 'POST' && parserToken && header0 === `Bearer ${parserToken}`) return next();
   return requireAuth(req, res, next);
 });
 
