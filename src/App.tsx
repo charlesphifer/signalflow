@@ -436,6 +436,7 @@ export default function App() {
           <IntakeQueue
             drafts={drafts}
             people={people}
+            user={user!}
             onRefresh={refreshIntake}
             onConfirm={handleConfirmDraft}
             onToast={showToast}

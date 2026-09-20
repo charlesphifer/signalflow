@@ -228,6 +228,44 @@ app.delete('/api/users/:id', isAdmin, (req, res) => {
   res.json({ ok: true, removed: users.length - next.length });
 });
 
+// ---- Intake: manual inbox check (admin only) ----
+// Runs the parser script as a subprocess. The parser is stateful (idempotency
+// ledger) so CLI runs and button runs share the same dedup.
+import { execFile } from 'child_process';
+const PARSER_SCRIPT = process.env.PARSER_SCRIPT || '/root/signalflow-parser/parser.py';
+const PARSER_TIMEOUT = 120000;
+
+// Parser runs on the HOST (has AgentMail SDK + tesseract). The API container
+// shares /data with the host watcher: writing a request flag here asks the
+// watcher to run the parser; results arrive as drafts via /api/drafts.
+const CHECK_FLAG = join(DATA_DIR, 'intake_check.request');
+const CHECK_STATUS = join(DATA_DIR, 'intake_check.status');
+
+app.post('/api/intake/check', isAdmin, (req, res) => {
+  try {
+    // If a check is already running, say so
+    try {
+      const st = JSON.parse(readFileSync(CHECK_STATUS, 'utf-8'));
+      if (st.running && Date.now() - st.startedAt < 120000) {
+        return res.json({ ok: true, queued: true, alreadyRunning: true, startedAt: st.startedAt });
+      }
+    } catch { /* no status file yet */ }
+    writeJsonAtomic(CHECK_FLAG, { requestedAt: new Date().toISOString(), by: req.user.username });
+    res.json({ ok: true, queued: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to queue check: ' + err.message });
+  }
+});
+
+app.get('/api/intake/status', isAdmin, (_req, res) => {
+  try {
+    if (!existsSync(CHECK_STATUS)) return res.json({ running: false, lastRun: null });
+    res.json(JSON.parse(readFileSync(CHECK_STATUS, 'utf-8')));
+  } catch {
+    res.json({ running: false, lastRun: null });
+  }
+});
+
 // ---- Forgot password flow ----
 // POST /api/auth/forgot { username } -> generates one-time code (15 min), notifies admin via HA
 // PUT  /api/auth/reset { username, code, newPassword } -> consumes code, sets password

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import type { Person, PendingDraft, Project, ProjectType, DraftProjectType } from '../types';
+import type { Person, PendingDraft, Project, ProjectType, DraftProjectType, AuthUser } from '../types';
 import { DEFAULT_ASSESSMENT_CHECKLIST, DEFAULT_DESIGN_CHECKLIST } from '../data/defaultChecklists';
 import { updateDraft, deleteDraft } from '../hooks/useIntake';
+import { apiFetch } from '../hooks/useAuth';
 
 interface IntakeQueueProps {
   drafts: PendingDraft[];
   people: Person[];
+  user: AuthUser;
   onRefresh: () => void;
   onConfirm: (draft: PendingDraft, overrides: DraftOverrides) => void;
   onToast: (msg: string) => void;
@@ -33,7 +35,32 @@ function parseAddress(addr: string): { city: string; state: string; siteAddress:
   return { city, state, siteAddress };
 }
 
-export default function IntakeQueue({ drafts, people, onRefresh, onConfirm, onToast }: IntakeQueueProps) {
+export default function IntakeQueue({ drafts, people, user, onRefresh, onConfirm, onToast }: IntakeQueueProps) {
+  const [checking, setChecking] = useState(false);
+  const isAdminUser = user.roles.includes('admin');
+
+  const handleCheckInbox = async () => {
+    setChecking(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; queued: boolean; alreadyRunning?: boolean }>('/intake/check', { method: 'POST' });
+      if (res.alreadyRunning) {
+        onToast('A check is already running…');
+      } else {
+        onToast('Inbox check queued — drafts will appear shortly');
+        // Poll for the next few seconds so results appear without manual refresh
+        let tries = 0;
+        const t = setInterval(() => {
+          tries++;
+          onRefresh();
+          if (tries >= 6) clearInterval(t);
+        }, 5000);
+      }
+    } catch {
+      onToast('Check failed — is the watcher running?');
+    } finally {
+      setTimeout(() => setChecking(false), 1500);
+    }
+  };
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dismissTarget, setDismissTarget] = useState<PendingDraft | null>(null);
   const pending = drafts.filter(d => d.status === 'pending');
@@ -47,6 +74,18 @@ export default function IntakeQueue({ drafts, people, onRefresh, onConfirm, onTo
             {pending.length} pending announcement{pending.length === 1 ? '' : 's'} · review, adjust, then confirm to create projects
           </p>
         </div>
+        {isAdminUser && (
+          <button
+            onClick={handleCheckInbox}
+            disabled={checking}
+            className={`text-xs font-black px-3 py-2 rounded-lg transition-all ${
+              checking ? 'bg-charcoal-800 text-charcoal-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow'
+            }`}
+            title="Check the AgentMail inbox for new order announcements"
+          >
+            {checking ? 'Checking…' : '📥 Check Inbox'}
+          </button>
+        )}
         <button
           onClick={onRefresh}
           className="text-xs font-bold border border-charcoal-700 hover:border-charcoal-500 text-charcoal-300 hover:text-white px-3 py-2 rounded-lg transition-all"
