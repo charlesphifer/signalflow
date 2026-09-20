@@ -329,7 +329,16 @@ app.put('/api/projects', canEdit, (req, res) => {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ error: 'Body must be a JSON array' });
     }
+    const before = readJson(DATA_FILE, []);
+    const beforeIds = new Set(before.map((p) => String(p.id)));
     writeJsonAtomic(DATA_FILE, req.body);
+    const added = req.body.filter((p) => !beforeIds.has(String(p.id)));
+    // Fire notifications for genuinely new projects (email-ingested or manual)
+    for (const p of added) {
+      const who = req.user?.displayName || req.user?.username || 'someone';
+      const source = p.source === 'email' ? 'email ingestion' : 'manual creation';
+      notifyHomeAssistant(`New project created via ${source}: ${p.name || 'Unnamed'} — ${p.type || 'untyped'} (${who})`);
+    }
     console.log(`Saved ${req.body.length} projects at ${new Date().toISOString()}`);
     res.json({ ok: true, count: req.body.length, savedAt: new Date().toISOString() });
   } catch (err) {
