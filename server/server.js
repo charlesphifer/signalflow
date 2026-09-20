@@ -133,15 +133,18 @@ app.post('/api/auth/login', (req, res) => {
   const ip = (req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').toString().split(',')[0].trim();
   if (!user) {
     recordFailedLogin(String(username), ip, 'unknown user');
+    audit(req, 'auth.failedLogin', String(username), { reason: 'unknown user' });
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   if (!verifyPassword(password, user.password)) {
     recordFailedLogin(user.username, ip, 'wrong password');
+    audit(req, 'auth.failedLogin', user.username, { reason: 'wrong password' });
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   const token = signToken({ sub: user.id, username: user.username, roles: user.roles, displayName: user.displayName });
   const silent = SILENT_USERNAMES.includes(String(username).toLowerCase());
   recordLogin(user.username, ip, !silent);
+  audit(req, 'auth.login', user.username, { silent });
   if (!silent) {
     const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     notifyHomeAssistant(`${user.displayName || user.username} signed in at ${when} (IP ${ip})`);
@@ -202,6 +205,7 @@ app.post('/api/users', isAdmin, (req, res) => {
   };
   users.push(user);
   writeJsonAtomic(USERS_FILE, users);
+  audit(req, 'user.created', user.username, { newUsername: user.username, roles: user.roles, email: user.email });
   const { password: _p, ...safe } = user;
   res.json({ ok: true, user: safe });
 });
@@ -216,6 +220,9 @@ app.put('/api/users/:id', isAdmin, (req, res) => {
   if (displayName !== undefined) users[idx].displayName = displayName;
   if (email !== undefined) users[idx].email = String(email).trim();
   writeJsonAtomic(USERS_FILE, users);
+  audit(req, 'user.updated', users[idx].username, {
+    changed: [password && 'password', roles !== undefined && 'roles', displayName !== undefined && 'displayName', email !== undefined && 'email'].filter(Boolean),
+  });
   const { password: _p, ...safe } = users[idx];
   res.json({ ok: true, user: safe });
 });
@@ -223,8 +230,10 @@ app.put('/api/users/:id', isAdmin, (req, res) => {
 app.delete('/api/users/:id', isAdmin, (req, res) => {
   if (req.user.sub === req.params.id) return res.status(400).json({ error: 'Cannot delete your own account' });
   const users = readJson(USERS_FILE, []);
+  const removedUser = users.find((u) => u.id === req.params.id);
   const next = users.filter((u) => u.id !== req.params.id);
   writeJsonAtomic(USERS_FILE, next);
+  if (removedUser) audit(req, 'user.deleted', removedUser.username, {});
   res.json({ ok: true, removed: users.length - next.length });
 });
 
@@ -270,6 +279,29 @@ app.get('/api/intake/status', isAdmin, (_req, res) => {
 // POST /api/auth/forgot { username } -> generates one-time code (15 min), notifies admin via HA
 // PUT  /api/auth/reset { username, code, newPassword } -> consumes code, sets password
 const RESETS_FILE = join(DATA_DIR, 'password_resets.json');
+const AUDIT_FILE = join(DATA_DIR, 'audit.json');
+
+// ── Unified audit trail (append-only, immutable) ──
+// Every mutating action records: who, what, target, before/after summary, IP.
+function audit(req, action, target, details = {}) {
+  try {
+    const entries = readJson(AUDIT_FILE, []);
+    entries.unshift({
+      id: `a-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      at: new Date().toISOString(),
+      user: req.user ? (req.user.displayName || req.user.username) : (req.body?.username || 'anonymous'),
+      username: req.user?.username || req.body?.username || '',
+      ip: (req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').toString().split(',')[0].trim(),
+      action,
+      target,
+      ...details,
+    });
+    // Append-only: keep forever (Charles's choice, small volume)
+    writeJsonAtomic(AUDIT_FILE, entries.slice(0, 50000));
+  } catch (err) {
+    console.error('Audit error:', err.message);
+  }
+}
 
 app.post('/api/auth/forgot', async (req, res) => {
   const { username } = req.body || {};
@@ -332,6 +364,7 @@ app.put('/api/auth/reset', (req, res) => {
   writeJsonAtomic(RESETS_FILE, resets);
   writeJsonAtomic(USERS_FILE, users);
   recordLogin(user.username, req.socket?.remoteAddress || 'unknown', true); // audit as event
+  audit(req, 'auth.passwordReset', user.username, {});
   notifyHomeAssistant(`PASSWORD RESET COMPLETED for ${user.displayName || user.username}`);
   res.json({ ok: true });
 });
@@ -349,6 +382,7 @@ app.put('/api/auth/password', (req, res) => {
   }
   user.password = hashPassword(newPassword);
   writeJsonAtomic(USERS_FILE, users);
+  audit(req, 'auth.passwordChanged', user.username, {});
   res.json({ ok: true });
 });
 
@@ -372,9 +406,9 @@ app.put('/api/projects', canEdit, (req, res) => {
       return res.status(400).json({ error: 'Body must be a JSON array' });
     }
     const before = readJson(DATA_FILE, []);
-    const beforeIds = new Set(before.map((p) => String(p.id)));
+    const beforeById = new Map(before.map((p) => [String(p.id), p]));
     writeJsonAtomic(DATA_FILE, req.body);
-    const added = req.body.filter((p) => !beforeIds.has(String(p.id)));
+    const added = req.body.filter((p) => !beforeById.has(String(p.id)));
     // Fire notifications for genuinely new projects (email-ingested or manual)
     for (const p of added) {
       const who = req.user?.displayName || req.user?.username || 'someone';
@@ -382,6 +416,51 @@ app.put('/api/projects', canEdit, (req, res) => {
       console.log(`New project detected: ${p.id} (${p.name}) — firing HA notification`);
       notifyHomeAssistant(`New project created via ${source}: ${p.name || 'Unnamed'} — ${p.type || 'untyped'} (${who})`)
         .then((ok) => console.log(`HA notify result for ${p.id}: ${ok}`));
+      audit(req, 'project.create', p.name || p.id, { projectId: p.id, projectType: p.type, source: p.source || 'manual' });
+    }
+    // Audit meaningful changes to existing projects: checklist toggles, field edits, archive/delete
+    const afterIds = new Set(req.body.map((p) => String(p.id)));
+    for (const [id, prev] of beforeById) {
+      if (!afterIds.has(id)) {
+        audit(req, 'project.delete', prev.name || id, { projectId: id });
+        continue;
+      }
+      const next = req.body.find((p) => String(p.id) === id);
+      if (!next) continue;
+      // Checklist diffs
+      const prevCl = new Map((prev.checklist || []).map((c) => [c.id, c]));
+      for (const item of (next.checklist || [])) {
+        const beforeItem = prevCl.get(item.id);
+        if (!beforeItem) {
+          audit(req, 'checklist.itemAdded', next.name || id, { projectId: id, item: item.task, assignedTo: item.assignedTo });
+        } else {
+          if (!!item.completed !== !!beforeItem.completed) {
+            audit(req, item.completed ? 'checklist.completed' : 'checklist.uncompleted', next.name || id,
+              { projectId: id, item: item.task, assignedTo: item.assignedTo || beforeItem.assignedTo });
+          }
+          if ((item.assignedTo || '') !== (beforeItem.assignedTo || '')) {
+            audit(req, 'checklist.assigned', next.name || id, {
+              projectId: id, item: item.task,
+              from: beforeItem.assignedTo || '(project engineer)', to: item.assignedTo || '(project engineer)',
+            });
+          }
+        }
+      }
+      // Key field diffs
+      for (const f of ['name', 'city', 'state', 'stage', 'type', 'goLiveDate', 'pm', 'ae', 'assignedEngineer', 'nkProjectNumber', 'squareFootage']) {
+        const pv = typeof prev[f] === 'object' ? JSON.stringify(prev[f]) : String(prev[f] ?? '');
+        const nv = typeof next[f] === 'object' ? JSON.stringify(next[f]) : String(next[f] ?? '');
+        if (pv !== nv) {
+          audit(req, 'project.fieldChanged', next.name || id, { projectId: id, field: f, from: pv, to: nv });
+        }
+      }
+      if (!!next.isArchived !== !!prev.isArchived) {
+        audit(req, next.isArchived ? 'project.archived' : 'project.unarchived', next.name || id, { projectId: id });
+      }
+      // Notes changes (content saved as summary to keep audit small)
+      if ((next.notes || '') !== (prev.notes || '')) {
+        audit(req, 'project.notesChanged', next.name || id, { projectId: id });
+      }
     }
     console.log(`Saved ${req.body.length} projects at ${new Date().toISOString()}`);
     res.json({ ok: true, count: req.body.length, savedAt: new Date().toISOString() });
@@ -401,6 +480,7 @@ app.put('/api/people', canEdit, (req, res) => {
     if (!Array.isArray(req.body)) {
       return res.status(400).json({ error: 'Body must be a JSON array' });
     }
+    audit(req, 'people.rosterSaved', 'people roster', { count: req.body.length });
     writeJsonAtomic(PEOPLE_FILE, req.body);
     res.json({ ok: true, count: req.body.length });
   } catch (err) {
@@ -455,16 +535,27 @@ app.put('/api/drafts/:id', canEdit, (req, res) => {
   const drafts = readJson(DRAFTS_FILE, []);
   const idx = drafts.findIndex((d) => d.id === req.params.id);
   if (idx < 0) return res.status(404).json({ error: 'Draft not found' });
+  const prevDraft = { ...drafts[idx] };
   drafts[idx] = { ...drafts[idx], ...req.body, id: req.params.id };
   writeJsonAtomic(DRAFTS_FILE, drafts);
+  if (prevDraft.status !== drafts[idx].status) {
+    audit(req, `draft.${drafts[idx].status}`, drafts[idx].accountName || drafts[idx].emailSubject || req.params.id, { draftId: req.params.id, from: prevDraft.status, to: drafts[idx].status });
+  }
   res.json({ ok: true });
 });
 
 app.delete('/api/drafts/:id', canEdit, (req, res) => {
   const drafts = readJson(DRAFTS_FILE, []);
+  const removed = drafts.find((d) => d.id === req.params.id);
   const next = drafts.filter((d) => d.id !== req.params.id);
   writeJsonAtomic(DRAFTS_FILE, next);
+  if (removed) audit(req, 'draft.deleted', removed.accountName || removed.emailSubject || req.params.id, { draftId: req.params.id });
   res.json({ ok: true, removed: drafts.length - next.length });
+});
+
+// ---- Audit trail (admin, view-only) ----
+app.get('/api/audit', isAdmin, (_req, res) => {
+  res.json(readJson(AUDIT_FILE, []));
 });
 
 // Health check (unauthenticated)

@@ -11,6 +11,7 @@ import IntakeQueue, { draftToProject } from './components/IntakeQueue';
 import PeopleManager from './components/PeopleManager';
 import ChangePassword from './components/ChangePassword';
 import UserAdmin from './components/UserAdmin';
+import AuditLog from './components/AuditLog';
 import LoginScreen from './components/LoginScreen';
 
 import Header from './components/Header';
@@ -458,6 +459,11 @@ export default function App() {
         {/* TAB: User Admin (admin only) */}
         {activeTab === 'user-admin' && user && (
           <UserAdmin currentUser={user} onToast={showToast} />
+        )}
+
+        {/* TAB: Audit Log (admin only) */}
+        {activeTab === 'audit' && (
+          <AuditLog onToast={showToast} />
         )}
 
         {/* TAB: Calendar */}

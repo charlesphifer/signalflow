@@ -21,6 +21,7 @@ const tabs: { id: ActiveTab; label: string; shortLabel: string; adminOnly?: bool
   { id: 'email-vault', label: 'Email Boilerplate Vault', shortLabel: 'Email Vault' },
   { id: 'docs-search', label: 'Technical Reference Vault', shortLabel: 'Tech Ref' },
   { id: 'user-admin', label: 'User Admin', shortLabel: 'Admin', adminOnly: true },
+  { id: 'audit', label: 'Audit Log', shortLabel: 'Audit', adminOnly: true },
 ];
 
 export default function Header({ activeTab, onTabChange, saveStatus, onSaveNow, onNewProject, pendingDraftCount, user, onLogout }: HeaderProps) {

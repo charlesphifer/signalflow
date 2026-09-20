@@ -91,7 +91,7 @@ export type ProjectStage = 'Kickoff' | 'Pre-Work' | 'On-Site' | 'Reporting' | 'C
 export type SortField = 'name' | 'number' | 'goLive' | 'stage';
 export type SortOrder = 'asc' | 'desc';
 export type ViewMode = 'active' | 'archived';
-export type ActiveTab = 'projects' | 'calendar' | 'email-vault' | 'docs-search' | 'intake' | 'people' | 'user-admin';
+export type ActiveTab = 'projects' | 'calendar' | 'email-vault' | 'docs-search' | 'intake' | 'people' | 'user-admin' | 'audit';
 
 export interface Project {
   id: string;
