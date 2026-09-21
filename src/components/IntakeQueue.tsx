@@ -150,7 +150,7 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
   const [engineerName, setEngineerName] = useState('');
   const [sqft, setSqft] = useState(draft.squareFootage != null ? String(draft.squareFootage) : '');
 
-  const ams = people.filter(p => p.roles.includes('AM'));
+  const ams = people.filter(p => p.roles.includes('AM/AE'));
   const pms = people.filter(p => p.roles.includes('PM'));
 
   useEffect(() => { setType(draft.suggestedType); }, [draft.suggestedType]);
@@ -275,7 +275,7 @@ function DraftCard({ draft, people, expanded, onToggle, onConfirm, onDismiss, on
               />
             </label>
             <label className="text-xs text-charcoal-400 flex flex-col gap-1">
-              Account manager (AM)
+              Account manager / account executive (AM/AE)
               <input
                 list="intake-ams"
                 value={amName}

@@ -31,7 +31,7 @@ export default function PeopleManager({ people, onSave, onToast }: PeopleManager
     setDirty(true);
   };
 
-  const toggleRole = (id: string, role: 'AM' | 'PM' | 'Engineer') => {
+  const toggleRole = (id: string, role: 'AM/AE' | 'PM' | 'Engineer') => {
     setDraft(prev =>
       prev.map(p =>
         p.id === id
@@ -62,7 +62,7 @@ export default function PeopleManager({ people, onSave, onToast }: PeopleManager
         <div>
           <h2 className="text-lg font-black text-white tracking-tight">People Roster</h2>
           <p className="text-xs text-charcoal-400">
-            Account managers (AM) and project managers (PM) — auto-fills contact details across projects and intake drafts
+            Account managers / account executives (AM/AE) and project managers (PM) — auto-fills contact details across projects and intake drafts
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -89,7 +89,7 @@ export default function PeopleManager({ people, onSave, onToast }: PeopleManager
       <div className="flex-1 overflow-y-auto">
         {draft.length === 0 ? (
           <div className="bg-charcoal-900 border border-charcoal-800 rounded-xl p-8 text-center text-charcoal-500 text-sm">
-            No people yet. Add your AMs and PMs — they'll become dropdown options when creating projects.
+            No people yet. Add your AM/AEs and PMs — they'll become dropdown options when creating projects.
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -106,7 +106,7 @@ export default function PeopleManager({ people, onSave, onToast }: PeopleManager
                 <div className="md:col-span-2 text-[10px] font-bold text-charcoal-500 uppercase tracking-wide flex flex-col gap-1">
                   Roles
                   <div className="flex gap-1.5">
-                    {(['AM', 'PM', 'Engineer'] as const).map(role => (
+                    {(['AM/AE', 'PM', 'Engineer'] as const).map(role => (
                       <button
                         key={role}
                         onClick={() => toggleRole(person.id, role)}

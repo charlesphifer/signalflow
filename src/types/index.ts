@@ -7,7 +7,7 @@ export interface Contact {
 export interface Person {
   id: string;
   name: string;
-  roles: Array<'AM' | 'PM' | 'Engineer'>;
+  roles: Array<'AM/AE' | 'PM' | 'Engineer'>;
   email: string;
   phone: string;
   company: string;
