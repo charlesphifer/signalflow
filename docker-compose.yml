@@ -17,13 +17,15 @@ services:
     environment:
       - PORT=3000
       - DATA_DIR=/data
-      - JWT_SECRET=${SIGNALFLOW_JWT_SECRET:-change-me-in-env-file}
-      - PARSER_TOKEN=${SIGNALFLOW_PARSER_TOKEN:-change-me-parser-token}
+      - JWT_SECRET=${SIGNALFLOW_JWT_SECRET}
+      - PARSER_TOKEN=${SIGNALFLOW_PARSER_TOKEN}
       - HASS_URL=${HASS_URL}
       - HASS_TOKEN=${HASS_TOKEN}
       - HASS_NOTIFY_SERVICE=notify
       - AGENTMAIL_API_KEY=${AGENTMAIL_API_KEY}
       - AGENTMAIL_INBOX=jarvis0772@agentmail.to
+      - SEED_ADMIN_PASSWORD=${SIGNALFLOW_SEED_ADMIN_PASSWORD:-}
+      - SEED_ADMIN_USERNAME=${SIGNALFLOW_SEED_ADMIN_USERNAME:-charles}
       - APP_BASE_URL=${APP_BASE_URL:-https://aihubvoice.space}
       - TZ=America/New_York
 

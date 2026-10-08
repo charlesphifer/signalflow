@@ -34,17 +34,21 @@ function writeJsonAtomic(file, data) {
   renameSync(tmp, file);
 }
 
-// ---- Seed users on first boot ----
+// ---- Seed first admin on empty volume (env-driven; NO hardcoded passwords) ----
 function seedUsers() {
   let users = readJson(USERS_FILE, null);
   if (users && users.length > 0) return;
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD || '';
+  const seedUsername = (process.env.SEED_ADMIN_USERNAME || 'charles').trim().toLowerCase();
+  if (seedPassword.length < 12) {
+    console.error('NO USERS EXIST. Refusing to seed known-default credentials. To create the first admin, restart with SEED_ADMIN_PASSWORD set (min 12 chars, optionally SEED_ADMIN_USERNAME), then remove the variable.');
+    return;
+  }
   users = [
-    { id: 'u-admin', username: 'charles', password: hashPassword('ChangeMe-Demo2026!'), roles: ['admin', 'engineer'], displayName: 'Charles Phifer', email: 'cphifer3@gmail.com' },
-    { id: 'u-eng1', username: 'demo-engineer', password: hashPassword('engineer123'), roles: ['engineer'], displayName: 'Demo Engineer' },
-    { id: 'u-view1', username: 'demo-viewer', password: hashPassword('viewer123'), roles: ['viewer'], displayName: 'Demo Viewer' },
+    { id: 'u-admin', username: seedUsername, password: hashPassword(seedPassword), roles: ['admin', 'engineer'], displayName: 'Charles Phifer', email: 'cphifer3@gmail.com' },
   ];
   writeJsonAtomic(USERS_FILE, users);
-  console.log('Seeded default users (charles / demo-engineer / demo-viewer)');
+  console.log(`Seeded first admin "${seedUsername}" from SEED_ADMIN_PASSWORD (value not logged). Remove the variable now.`);
 }
 seedUsers();
 
