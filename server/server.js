@@ -103,6 +103,22 @@ async function sendResetEmail(to, displayName, resetToken, username) {
   } catch { return false; }
 }
 
+// Generic email sender via AgentMail REST
+const AUDIT_EMAIL_TO = (process.env.AUDIT_EMAIL_TO || 'cphifer3@gmail.com').split(',').map(s => s.trim()).filter(Boolean);
+
+async function sendEmail(to, subject, text) {
+  if (!AGENTMAIL_KEY) return false;
+  try {
+    const res = await fetch(`https://api.agentmail.to/v0/inboxes/${encodeURIComponent(AGENTMAIL_INBOX)}/messages/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AGENTMAIL_KEY}` },
+      body: JSON.stringify({ to: Array.isArray(to) ? to : [to], subject, text }),
+      signal: AbortSignal.timeout(10000),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 function notifyHomeAssistant(text) {
   if (!HASS_URL || !HASS_TOKEN) return Promise.resolve(false);
   return new Promise((resolve) => {
@@ -134,11 +150,13 @@ app.post('/api/auth/login', (req, res) => {
   if (!user) {
     recordFailedLogin(String(username), ip, 'unknown user');
     audit(req, 'auth.failedLogin', String(username), { reason: 'unknown user' });
+    sendEmail(AUDIT_EMAIL_TO, `SignalFlow FAILED login — ${username}`, `Failed login attempt.\nUsername: ${username}\nTime: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York' })} ET\nIP: ${ip}\nReason: unknown user`);
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   if (!verifyPassword(password, user.password)) {
     recordFailedLogin(user.username, ip, 'wrong password');
     audit(req, 'auth.failedLogin', user.username, { reason: 'wrong password' });
+    sendEmail(AUDIT_EMAIL_TO, `SignalFlow FAILED login — ${user.username}`, `Failed login attempt (wrong password).\nUsername: ${user.username}\nTime: ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York' })} ET\nIP: ${ip}`);
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   const token = signToken({ sub: user.id, username: user.username, roles: user.roles, displayName: user.displayName });
@@ -146,9 +164,12 @@ app.post('/api/auth/login', (req, res) => {
   recordLogin(user.username, ip, !silent);
   audit(req, 'auth.login', user.username, { silent });
   if (!silent) {
-    const when = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' });
+    const when = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York' });
     notifyHomeAssistant(`${user.displayName || user.username} signed in at ${when} (IP ${ip})`);
   }
+  const whenAll = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/New_York' });
+  sendEmail(AUDIT_EMAIL_TO, `SignalFlow login — ${user.displayName || user.username}`,
+    `${user.displayName || user.username} (${user.username}) signed in.\nTime: ${whenAll} ET\nIP: ${ip}\nRoles: ${(user.roles || []).join(', ')}`);
   res.json({ token, user: { id: user.id, username: user.username, roles: user.roles, displayName: user.displayName } });
 });
 
